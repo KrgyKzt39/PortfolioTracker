@@ -147,6 +147,29 @@ class FrankfurterFx:
             raise ProviderError(f"Unexpected Frankfurter response: {exc}") from exc
 
 
+class OpenErApiFx:
+    """ExchangeRate-API open access endpoint (https://www.exchangerate-api.com/docs/free).
+    Free, no key, ~160 currencies, updated once a day. Their terms ask for attribution."""
+
+    name = "exchangerate-api"
+    url = "https://open.er-api.com/v6/latest/{base}"
+
+    def __init__(self, client: httpx.Client):
+        self.client = client
+        self.limiter = RateLimiter(1.0)
+
+    def fetch(self, base: str, quotes: list[str]) -> list[FxQuote]:
+        quotes = [q for q in quotes if q != base]
+        if not quotes:
+            return []
+        data = get_json(self.client, self.url.format(base=base), None, self.limiter)
+        if data.get("result") != "success":
+            raise ProviderError(data.get("error-type") or "ExchangeRate-API error")
+        d = datetime.fromtimestamp(int(data["time_last_update_unix"]), tz=timezone.utc).date()
+        rates = data.get("rates") or {}
+        return [FxQuote(base, q, Decimal(str(rates[q])), d, self.name) for q in quotes if q in rates]
+
+
 class YahooChart(SingleQuoteBatch):
     name = "yahoo"
     url = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"

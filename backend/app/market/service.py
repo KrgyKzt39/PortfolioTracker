@@ -14,9 +14,10 @@ from sqlalchemy import select
 
 from .. import config
 from ..db import session_scope
-from ..models import CURRENCIES, DividendEvent, EarningsDate, FxRate, Holding, Instrument, PriceHistory, utcnow
+from ..models import DividendEvent, DividendPayment, EarningsDate, FxRate, Holding, Instrument, PriceHistory, utcnow
 from ..services import get_settings
-from .providers import AlpacaData, AlphaVantage, FrankfurterFx, LongbridgeQuotes, ProviderError, YahooChart
+from ..currencies import ECB
+from .providers import AlpacaData, AlphaVantage, FrankfurterFx, LongbridgeQuotes, OpenErApiFx, ProviderError, YahooChart
 
 
 class RefreshState:
@@ -91,34 +92,54 @@ def refresh_all() -> dict:
         settings = get_settings(db)
         held = select(Holding.instrument_id)
         instruments = list(db.scalars(select(Instrument).where(Instrument.price_mode == "auto", Instrument.id.in_(held))))
+        # Rates are needed for: the base currency, every held currency, and dividend currencies.
+        needed = {settings["base_currency"]}
+        needed |= {i.currency for i in db.scalars(select(Instrument).where(Instrument.id.in_(held)))}
+        needed |= {p.currency for p in db.scalars(select(DividendPayment))}
     with _client_factory() as client:
         yahoo = YahooChart(client) if settings["yahoo_enabled"] else None
         av = AlphaVantage(client, config.ALPHAVANTAGE_API_KEY) if config.ALPHAVANTAGE_API_KEY else None
-        fxp = FrankfurterFx(client) if settings["frankfurter_enabled"] else None
 
-        # FX: all supported currencies against USD (triangulation covers the rest).
-        fx_quotes = []
-        others = [c for c in CURRENCIES if c != "USD"]
-        if fxp:
-            try:
-                fx_quotes = fxp.fetch("USD", others)
-                results["fx"] = f"frankfurter ({len(fx_quotes)} rates)"
-            except ProviderError as exc:
-                errors["fx:frankfurter"] = str(exc)
-        if not fx_quotes and yahoo:
-            for c in others:
+        # FX: everything against USD (triangulation covers other pairs). ECB first, then
+        # ExchangeRate-API for currencies the ECB does not publish or when Frankfurter fails.
+        others = sorted(needed - {"USD"})
+        got: dict[str, object] = {}
+        sources = []
+        if settings["frankfurter_enabled"] and others:
+            ecb = [c for c in others if c in ECB]
+            if ecb:
                 try:
-                    fx_quotes.append(yahoo.fetch_fx("USD", c))
+                    for q in FrankfurterFx(client).fetch("USD", ecb):
+                        got[q.quote] = q
+                    sources.append("ECB")
+                except ProviderError as exc:
+                    errors["fx:frankfurter"] = str(exc)
+            missing = [c for c in others if c not in got]
+            if missing:
+                try:
+                    for q in OpenErApiFx(client).fetch("USD", missing):
+                        got[q.quote] = q
+                    sources.append("ExchangeRate-API")
+                except ProviderError as exc:
+                    errors["fx:exchangerate-api"] = str(exc)
+        if yahoo:
+            for c in [c for c in others if c not in got]:
+                try:
+                    got[c] = yahoo.fetch_fx("USD", c)
                 except ProviderError as exc:
                     errors[f"fx:USD{c}"] = str(exc)
-            if fx_quotes:
-                results["fx"] = f"yahoo ({len(fx_quotes)} rates)"
-        if fx_quotes:
+        if got:
             with session_scope() as db:
-                for q in fx_quotes:
+                for q in got.values():
                     _upsert_fx(db, q)
-        elif not fxp and not yahoo:
-            results["fx"] = "no FX provider enabled (manual rates only)"
+            results["fx"] = f"{len(got)} rates ({', '.join(sources) or 'yahoo'})"
+        elif not others:
+            results["fx"] = "no exchange rates needed"
+        elif not settings["frankfurter_enabled"] and not yahoo:
+            results["fx"] = "exchange-rate updates are off (manual rates only)"
+        for c in others:
+            if c not in got and f"fx:USD{c}" not in errors:
+                errors.setdefault(f"fx:{c}", "no source returned this rate; enter it manually in Settings")
 
         remaining = {i.id: i for i in instruments}
         tried: dict[int, list[str]] = {i.id: [] for i in instruments}

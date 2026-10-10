@@ -3,12 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Download, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
 import { api } from "../lib/api";
 import { dateTime, num, today } from "../lib/format";
+import { CURRENCY_LIST } from "../lib/format";
 import { useBrokers, useCategories, useInvalidateAll, useMeta, useOpenSheet, useSaveSettings, useSettings } from "../lib/hooks";
 import type { AuditEntry, RefreshState, Settings } from "../lib/types";
 import { Button, ConfirmSheet, Field, Input, Select, Sheet, Spinner, Toggle, useToast } from "./ui";
 import { Section } from "./forms";
 
-const CURRENCIES = ["MYR", "USD", "SGD", "GBP", "HKD"];
 
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
@@ -41,9 +41,7 @@ function SettingsBody({ s }: { s: Settings }) {
         <Field label="Base currency">
           {(id) => (
             <Select id={id} value={s.base_currency} onChange={(e) => update({ base_currency: e.target.value as Settings["base_currency"] })}>
-              {CURRENCIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
+              {CURRENCY_LIST.map((c) => (<option key={c.code} value={c.code}>{c.code}</option>))}
             </Select>
           )}
         </Field>
@@ -70,7 +68,7 @@ function SettingsBody({ s }: { s: Settings }) {
           label="Yahoo Finance (unofficial)"
           description="Last resort, and the only free source with Bursa (.KL) prices. Not an official API, so it can break."
         />
-        <Toggle checked={s.frankfurter_enabled} onChange={(v) => update({ frankfurter_enabled: v })} label="Exchange rates (ECB)" description="Daily reference rates for MYR, USD, SGD, GBP, HKD." />
+        <Toggle checked={s.frankfurter_enabled} onChange={(v) => update({ frankfurter_enabled: v })} label="Exchange rates" description="Daily rates for the currencies you hold: ECB reference rates, plus ExchangeRate-API (open.er-api.com) for currencies the ECB does not publish." />
         {refresh.data && Object.keys(refresh.data.errors).length > 0 && (
           <details className="rounded-xl bg-ink-900 p-3 text-2xs text-muted">
             <summary className="cursor-pointer">Last refresh: {refresh.data.message}</summary>
@@ -200,14 +198,10 @@ function FxSection() {
     <Section title="FX rates">
       <form onSubmit={submit} className="grid grid-cols-[1fr_1fr_1.2fr] gap-2">
         <Select aria-label="From currency" value={base} onChange={(e) => setBase(e.target.value)}>
-          {CURRENCIES.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
+          {CURRENCY_LIST.map((c) => (<option key={c.code} value={c.code}>{c.code}</option>))}
         </Select>
         <Select aria-label="To currency" value={quote} onChange={(e) => setQuote(e.target.value)}>
-          {CURRENCIES.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
+          {CURRENCY_LIST.map((c) => (<option key={c.code} value={c.code}>{c.code}</option>))}
         </Select>
         <Input aria-label="Rate" inputMode="decimal" placeholder={`1 ${base} = ? ${quote}`} value={rate} onChange={(e) => setRate(e.target.value)} />
         <Input aria-label="Rate date" type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} className="col-span-2" />

@@ -1,5 +1,5 @@
 export type Num = string | null;
-export type Currency = "MYR" | "USD" | "SGD" | "GBP" | "HKD";
+export type Currency = string;
 export type PriceStatus = "Live" | "Delayed" | "Cached" | "Manual" | "Unavailable" | "Partial";
 
 export interface Lot {
@@ -204,7 +204,7 @@ export interface Settings {
 }
 
 export interface Meta {
-  currencies: Currency[];
+  currencies: { code: string; name: string; symbol: string }[];
   demo: boolean;
   db_path: string;
   lan_urls: string[];

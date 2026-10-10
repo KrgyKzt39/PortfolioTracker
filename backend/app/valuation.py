@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from . import config
 from .fx import FxTable
-from .models import (CURRENCIES, Broker, Category, DividendEvent, DividendPayment, Holding, Instrument,
+from .models import (Broker, Category, DividendEvent, DividendPayment, Holding, Instrument,
                      PriceHistory, utcnow)
 from .services import get_settings
 
@@ -205,8 +205,9 @@ def build_portfolio(db: Session, base: str | None = None, today: date | None = N
         for k in ("value", "cost", "pl", "est"):
             totals[k] += t[k]
 
+    # Rates shown in the header: only the currencies you actually hold.
     fx_list = []
-    for c in CURRENCIES:
+    for c in sorted({inst.currency for iid, inst in instruments.items() if iid in lots}):
         if c != base:
             q = fx.quote(c, base)
             fx_list.append({"from": c, "to": base, "rate": q.rate if q else None,

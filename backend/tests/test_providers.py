@@ -205,3 +205,29 @@ def test_longbridge_dividend_and_earnings_dates(api, creds, monkeypatch):
     assert [(c["kind"], c["symbol"], c.get("session")) for c in cal_items if c["kind"] == "earnings"] == [("earnings", "MSFT", "after")]
     assert {m for _, _, m in cal.calls} == {"US"}
     assert service.refresh_events() is None  # not due again for 12 hours
+
+
+def test_fx_fallback_for_currencies_the_ecb_does_not_publish(api, monkeypatch):
+    from app.market import service
+    a = api.broker()
+    api.holding(a["id"], "2330.TW", 1000, 500)  # TSMC -> TWD
+    api.holding(a["id"], "1155.KL", 100, 10)
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(req.url.host)
+        if "frankfurter" in req.url.host:
+            assert "TWD" not in req.url.params["symbols"]
+            return httpx.Response(200, json={"date": date.today().isoformat(), "rates": {"MYR": 4.4}})
+        if req.url.host == "open.er-api.com":
+            return httpx.Response(200, json={"result": "success", "time_last_update_unix": 1_760_000_000,
+                                             "rates": {"TWD": 31.5, "MYR": 4.41}})
+        return httpx.Response(404)
+
+    monkeypatch.setattr(service, "_client_factory", lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr("app.market.providers.time.sleep", lambda s: None)
+    out = service.refresh_all()
+    assert "ECB" in out["results"]["fx"] and "ExchangeRate-API" in out["results"]["fx"]
+    assert "open.er-api.com" in seen
+    rates = {(r["base"], r["quote"]): r for r in api.ok(api.c.get("/api/fx"))}
+    assert D(rates[("USD", "TWD")]["rate"]) == D("31.5") and rates[("USD", "MYR")]["source"] == "frankfurter"

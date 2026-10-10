@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { BottomNav, TABS, type Tab } from "./components/BottomNav";
 import { BrokerSheet, CategorySheet, DividendSheet, EarningsSheet, HoldingSheet, ImportSheet, PaymentSheet, PriceSheet, StockSheet } from "./components/forms";
 import { SettingsSheet } from "./components/SettingsSheet";
-import { PrivacyCtx, SheetCtx, useSettings, type SheetRequest } from "./lib/hooks";
+import { setCurrencies } from "./lib/format";
+import { PrivacyCtx, SheetCtx, useMeta, useSettings, type SheetRequest } from "./lib/hooks";
 import { Calendar } from "./pages/Calendar";
 import { Dashboard } from "./pages/Dashboard";
 import { Dividends } from "./pages/Dividends";
+import { Overview } from "./pages/Overview";
 
 const readTab = (): Tab => {
   const h = window.location.hash.replace("#/", "") as Tab;
@@ -16,6 +18,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(readTab);
   const [sheets, setSheets] = useState<SheetRequest[]>([]);
   const settings = useSettings();
+  const meta = useMeta();
+  if (meta.data) setCurrencies(meta.data.currencies);
   const [hidden, setHidden] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -41,6 +45,7 @@ export default function App() {
         <div className="safe-top mx-auto min-h-dvh max-w-[640px] px-3 pb-[calc(env(safe-area-inset-bottom)+92px)] sm:px-4">
           <main>
             {tab === "portfolio" && <Dashboard />}
+            {tab === "dashboard" && <Overview />}
             {tab === "dividends" && <Dividends />}
             {tab === "calendar" && <Calendar />}
           </main>

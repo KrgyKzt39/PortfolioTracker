@@ -1,9 +1,10 @@
-import { BarChart3, CalendarDays, DollarSign } from "lucide-react";
+import { BarChart3, CalendarDays, DollarSign, PieChart } from "lucide-react";
 import { cn } from "../lib/format";
 
-export type Tab = "portfolio" | "dividends" | "calendar";
+export type Tab = "portfolio" | "dashboard" | "dividends" | "calendar";
 export const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
   { id: "portfolio", label: "Portfolio", icon: BarChart3 },
+  { id: "dashboard", label: "Dashboard", icon: PieChart },
   { id: "dividends", label: "Dividends", icon: DollarSign },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
 ];

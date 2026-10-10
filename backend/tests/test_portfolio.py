@@ -218,3 +218,52 @@ def test_every_base_currency(api, base):
     api.price(api.instrument_id("AAPL"), 100)
     pf = api.portfolio(base)
     assert pf["base_currency"] == base and D(pf["totals"]["value"]) > 0
+
+
+def test_any_base_currency_and_header_rates(api, client):
+    api.fx("USD", "EUR", "0.9")
+    api.fx("USD", "JPY", "150")
+    api.fx("USD", "MYR", "4.5")
+    a = api.broker()
+    api.holding(a["id"], "7203.T", 100, 2500)  # Toyota on Tokyo -> JPY from the suffix
+    api.holding(a["id"], "MSFT", 1, 400)
+    api.price(api.instrument_id("7203.T"), 3000)
+    api.price(api.instrument_id("MSFT"), 450)
+    assert row(api.portfolio(), "7203.T")["currency"] == "JPY"
+    api.ok(client.put("/api/settings", json={"base_currency": "EUR"}))
+    pf = api.portfolio()
+    assert pf["base_currency"] == "EUR"
+    assert {f["from"] for f in pf["fx"]} == {"JPY", "USD"}  # only currencies you hold
+    expected = D(300000) / 150 * D("0.9") + 450 * D("0.9")
+    assert abs(D(pf["totals"]["value"]) - expected) < D("0.0001")
+    assert client.put("/api/settings", json={"base_currency": "XYZ"}).status_code == 422
+    meta = api.ok(client.get("/api/meta"))
+    assert {"code": "JPY", "name": "Japanese yen", "symbol": "¥"} in meta["currencies"]
+
+
+def test_fund_with_balance_and_amount_invested(api, client):
+    a = api.broker("KWSP")
+    api.ok(client.post("/api/holdings", json={"broker_id": a["id"], "symbol": "EPF", "name": "EPF Account 1",
+                                              "kind": "fund", "currency": "MYR", "quantity": "85000",
+                                              "total_cost": "70000", "price": "1"}))
+    api.ok(client.post("/api/holdings", json={"broker_id": a["id"], "symbol": "Public Ittikal", "kind": "fund",
+                                              "quantity": "10000", "total_cost": "3000", "price": "0.3512",
+                                              "currency": "MYR"}))
+    pf = api.portfolio()
+    epf = row(pf, "EPF")
+    assert epf["kind"] == "fund" and epf["price_status"] == "Manual"
+    assert D(epf["market_value"]) == 85000 and D(epf["gain"]) == 15000
+    ut = row(pf, "PUBLIC ITTIKAL")
+    assert D(ut["market_value"]) == D("3512") and D(ut["avg_cost"]) == D("0.3")
+    inst = next(i for i in api.ok(client.get("/api/instruments")) if i["symbol"] == "EPF")
+    assert inst["price_mode"] == "manual" and D(inst["withholding_tax_rate"]) == 0
+
+
+def test_value_history_recorded_when_opened(api, client):
+    a = api.broker()
+    api.holding(a["id"], "1155.KL", 100, 10)
+    api.price(api.instrument_id("1155.KL"), 11)
+    api.portfolio()
+    api.portfolio()
+    snaps = api.ok(client.get("/api/snapshots"))
+    assert len(snaps) == 1 and D(snaps[0]["value"]) == 1100

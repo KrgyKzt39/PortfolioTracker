@@ -62,7 +62,8 @@ def health(db: Session = DB):
 @router.get("/meta")
 def meta():
     from .netinfo import lan_addresses
-    return {"currencies": CURRENCIES, "demo": config.DEMO, "db_path": config.DB_PATH.name,
+    from .currencies import ALL
+    return {"currencies": [{"code": c, "name": n, "symbol": s} for c, (n, s) in ALL.items()], "demo": config.DEMO, "db_path": config.DB_PATH.name,
             "lan_urls": [f"http://{ip}:{config.PORT}" for ip in lan_addresses()] if config.HOST in ("0.0.0.0", "") else [],
             "alphavantage_configured": bool(config.ALPHAVANTAGE_API_KEY),
             "alpaca_configured": config.alpaca_configured(), "longbridge_configured": config.longbridge_configured()}
@@ -97,6 +98,13 @@ def portfolio(base: str | None = None, db: Session = DB):
         fail(ValidationError("unsupported base currency", "base"))
     pf = build_portfolio(db, base)
     pf["refresh"] = market.STATE.snapshot()
+    if base is None or base == get_settings(db)["base_currency"]:
+        from .snapshots import write_snapshot
+        try:
+            write_snapshot(db, pf=pf)
+            db.commit()
+        except Exception:  # history is a nice-to-have; never fail the main view over it
+            db.rollback()
     return pf
 
 
@@ -266,7 +274,8 @@ def update_instrument(iid: int, body: dict, db: Session = DB):
 
 @router.get("/holdings")
 def list_holdings(db: Session = DB):
-    return [{**row_dict(h), "broker": h.broker.name, "symbol": h.instrument.symbol} for h in db.scalars(select(Holding))]
+    return [{**row_dict(h), "broker": h.broker.name, "symbol": h.instrument.symbol, "kind": h.instrument.kind,
+             "currency": h.instrument.currency} for h in db.scalars(select(Holding))]
 
 
 @router.post("/holdings", status_code=201)
@@ -365,7 +374,7 @@ def fx_rates(db: Session = DB):
 def manual_fx(body: dict, db: Session = DB):
     def go():
         base, quote = (body.get("base") or "").upper(), (body.get("quote") or "").upper()
-        if base not in CURRENCIES or quote not in CURRENCIES or base == quote:
+        if base not in CURRENCIES or quote not in CURRENCIES or base == quote:  # noqa: SIM102
             raise ValidationError("choose two different supported currencies", "base")
         rate = to_decimal(body.get("rate"), "rate", positive=True)
         if rate is None:
@@ -470,8 +479,10 @@ def remove_earnings(eid: int, db: Session = DB):
 
 # ---------------------------------------------------------------- audit, snapshots, backups
 @router.get("/snapshots")
-def snapshots(db: Session = DB):
-    rows = db.scalars(select(ValuationSnapshot).order_by(ValuationSnapshot.snapshot_date))
+def snapshots(base: str | None = None, db: Session = DB):
+    base = base or get_settings(db)["base_currency"]
+    rows = db.scalars(select(ValuationSnapshot).where(ValuationSnapshot.base_currency == base)
+                      .order_by(ValuationSnapshot.snapshot_date))
     return [{"date": r.snapshot_date, "base_currency": r.base_currency, "value": r.total_value, "pl": r.total_pl}
             for r in rows]
 

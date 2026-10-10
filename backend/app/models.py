@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base, DecimalText
 
-CURRENCIES = ("MYR", "USD", "SGD", "GBP", "HKD")
+from .currencies import CODES as CURRENCIES  # noqa: E402
 DIVIDEND_STATUSES = ("forecast", "announced", "pending", "received")
 
 

@@ -8,9 +8,12 @@ from .models import ValuationSnapshot
 from .valuation import build_portfolio
 
 
-def write_snapshot(db, on: date | None = None):
+def write_snapshot(db, on: date | None = None, pf: dict | None = None):
+    """Upsert today's value. Called on refresh, nightly, and when the portfolio is opened."""
     on = on or date.today()
-    pf = build_portfolio(db)
+    pf = pf or build_portfolio(db)
+    if pf["totals"]["incomplete"] and not pf["totals"]["value"]:
+        return None
     t = pf["totals"]
     detail = json.dumps([{"id": a["id"], "name": a["name"], "value": str(a["value"]), "pl": str(a["pl"])}
                          for a in pf["categories"]])

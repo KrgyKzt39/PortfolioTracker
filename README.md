@@ -4,7 +4,8 @@ A simple, local-first place to see all your holdings across brokers in one view.
 
 Your brokers stay the record of your trades. This app holds a snapshot of each holding (quantity and average cost, as your broker app shows them), adds live prices, and tracks dividends.
 
-- **Portfolio**: total value in your base currency (MYR, USD, SGD, GBP, HKD), P/L and return %, one card per category you define (e.g. "Blue chips", "Dividend", "Growth"). The same stock at several brokers shows as one row, with the per-broker split in its details. Arrange stocks by dragging, or pick a category in a stock's settings.
+- **Portfolio**: total value in the base currency you choose (49 currencies), P/L and return %, one card per category you define (e.g. "Blue chips", "Dividend", "Growth"). The same stock at several brokers shows as one row, with the per-broker split in its details. Arrange stocks by dragging, or pick a category in a stock's settings.
+- **Dashboard**: value over time and where your money is (by category, currency or broker).
 - **Dividends**: expected per year and per month, received in the last 12 months, a month-by-month chart, each holding's expected dividend and yield, and a short "did these arrive?" list to confirm payments.
 - **Calendar**: upcoming ex-dates, payment dates and earnings dates for stocks you hold.
 - **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first.
@@ -57,7 +58,7 @@ Price sources are tried in order; the first one that covers a symbol and returns
 | 4 | Yahoo Finance (unofficial, **off by default**) | Everything incl. Bursa (.KL) | Toggle in Settings |
 | – | Longbridge dividend & earnings dates | US, HK, SG holdings | Automatic when Longbridge keys are set (every 12 h on refresh) |
 | – | Manual | Anything, incl. ASNB | Always available |
-| FX | Frankfurter (ECB reference rates) | MYR, USD, SGD, GBP, HKD | On by default, no key |
+| FX | Frankfurter (ECB reference rates), then ExchangeRate-API (open.er-api.com) | 49 currencies | On by default, no key |
 
 Symbols are mapped automatically: `MSFT` → `MSFT.US`, `0005.HK` → `5.HK`, `D05.SI` → `D05.SG` for Longbridge; plain US tickers for Alpaca.
 

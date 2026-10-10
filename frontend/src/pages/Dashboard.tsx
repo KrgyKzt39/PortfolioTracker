@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, Eye, EyeOff, GripVertical, Pencil, Plus, RefreshCw, Settings as Gear, Upload } from "lucide-react";
 import { api } from "../lib/api";
-import { cn, money, pct, priceStr, qty, shortDate, tone } from "../lib/format";
+import { CURRENCY_LIST, cn, money, pct, priceStr, qty, shortDate, tone } from "../lib/format";
 import { useOpenSheet, usePortfolio, usePrivacy, useRefreshStatus, useSaveSettings, useSettings } from "../lib/hooks";
 import type { CategoryCard, Holding, Portfolio, PriceStatus, RefreshState } from "../lib/types";
 import { Badge, Button, Card, Empty, ErrorBox, IconButton, Spinner, useToast } from "../components/ui";
@@ -171,8 +171,10 @@ function Hero({ data }: { data: Portfolio }) {
             className="h-8 w-[78px] rounded-full border border-white/10 bg-white/5 pl-2.5 pr-5 text-[12px] font-semibold text-[#cfe0ff] focus:outline-none focus:ring-1 focus:ring-accent"
             style={{ backgroundPosition: "right 0.4rem center" }}
           >
-            {["MYR", "USD", "SGD", "GBP", "HKD"].map((c) => (
-              <option key={c}>{c}</option>
+            {CURRENCY_LIST.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code}
+              </option>
             ))}
           </select>
           <IconButton label="Settings" onClick={() => open({ kind: "settings" })} className="h-8 w-8 text-[#9db3dc]">
@@ -278,7 +280,7 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
 
 function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding; isDiv: boolean; hidden: boolean; base: string; expanded: boolean; onToggle: () => void }) {
   const ccy = h.currency;
-  const unit = h.kind === "fund" ? "units" : "shares";
+  const unit = h.kind === "fund" ? (Number(h.price) === 1 ? "balance" : "units") : "shares";
   return (
     <li className="border-b border-white/[0.045] last:border-b-0">
       <button

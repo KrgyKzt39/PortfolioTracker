@@ -8,23 +8,16 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .currencies import guess_currency
 from .models import CURRENCIES, Broker, Category, Holding, Instrument
 from .services import audit, row_dict
 
-SUFFIX_CCY = {".KL": "MYR", ".SI": "SGD", ".HK": "HKD", ".L": "GBP"}
 
 
 class ValidationError(ValueError):
     def __init__(self, message: str, field: str | None = None):
         super().__init__(message)
         self.field = field
-
-
-def guess_currency(symbol: str) -> str:
-    for suf, ccy in SUFFIX_CCY.items():
-        if symbol.upper().endswith(suf):
-            return ccy
-    return "USD"
 
 
 def to_decimal(v, field: str, positive=False, allow_zero=True) -> Decimal | None:
@@ -43,7 +36,7 @@ def to_decimal(v, field: str, positive=False, allow_zero=True) -> Decimal | None
 
 
 def get_or_create_instrument(db: Session, symbol: str, currency: str | None = None, name: str | None = None,
-                             category_id: int | None = None) -> tuple[Instrument, bool]:
+                             category_id: int | None = None, kind: str | None = None) -> tuple[Instrument, bool]:
     sym = symbol.strip().upper()
     if not sym:
         raise ValidationError("symbol is required", "symbol")
@@ -54,9 +47,16 @@ def get_or_create_instrument(db: Session, symbol: str, currency: str | None = No
         return inst, False
     ccy = (currency or guess_currency(sym)).upper()
     if ccy not in CURRENCIES:
-        raise ValidationError(f"currency must be one of {', '.join(CURRENCIES)}", "currency")
-    inst = Instrument(symbol=sym, currency=ccy, name=name or None, kind="stock", price_mode="auto",
-                      category_id=category_id, withholding_tax_rate=Decimal("0.3") if ccy == "USD" else Decimal(0))
+        raise ValidationError(f"unsupported currency {ccy}", "currency")
+    if len(sym) > 32:
+        raise ValidationError("symbol or fund name is too long (32 characters max)", "symbol")
+    kind = kind or "stock"
+    if kind not in ("stock", "etf", "reit", "fund", "other"):
+        raise ValidationError("invalid type", "kind")
+    # Funds (EPF, ASB, ASNB, unit trusts) have no market feed: you enter their price or NAV.
+    inst = Instrument(symbol=sym, currency=ccy, name=name or None, kind=kind,
+                      price_mode="manual" if kind == "fund" else "auto", category_id=category_id,
+                      withholding_tax_rate=Decimal("0.3") if (ccy == "USD" and kind != "fund") else Decimal(0))
     db.add(inst)
     db.flush()
     audit(db, "instrument", inst.id, "create", after=inst)
@@ -66,9 +66,13 @@ def get_or_create_instrument(db: Session, symbol: str, currency: str | None = No
 def save_holding(db: Session, data: dict, holding: Holding | None = None) -> Holding:
     """Create or update. Adding a stock a broker already holds updates that holding."""
     qty = to_decimal(data.get("quantity", holding.quantity if holding else None), "quantity", positive=True)
-    cost = to_decimal(data.get("avg_cost", holding.avg_cost if holding else None), "avg_cost")
     if qty is None:
         raise ValidationError("quantity is required", "quantity")
+    total = to_decimal(data.get("total_cost"), "total_cost")
+    if total is not None:  # funds: "amount you put in" instead of a per-unit cost
+        cost = total / qty
+    else:
+        cost = to_decimal(data.get("avg_cost", holding.avg_cost if holding else None), "avg_cost")
     if cost is None:
         raise ValidationError("average cost is required", "avg_cost")
     broker = db.get(Broker, data.get("broker_id") or (holding.broker_id if holding else None))
@@ -83,7 +87,8 @@ def save_holding(db: Session, data: dict, holding: Holding | None = None) -> Hol
             if inst is None:
                 raise ValidationError("unknown instrument", "instrument_id")
         else:
-            inst, _ = get_or_create_instrument(db, data.get("symbol") or "", data.get("currency"), data.get("name"), cat)
+            inst, _ = get_or_create_instrument(db, data.get("symbol") or "", data.get("currency"), data.get("name"), cat,
+                                               data.get("kind"))
         if cat and inst.category_id is None:
             inst.category_id = cat
         holding = db.scalar(select(Holding).where(Holding.broker_id == broker.id, Holding.instrument_id == inst.id))
@@ -102,6 +107,12 @@ def save_holding(db: Session, data: dict, holding: Holding | None = None) -> Hol
         holding.broker_id, holding.quantity, holding.avg_cost = broker.id, qty, cost
         holding.source = data.get("source", holding.source)
     db.flush()
+    price = to_decimal(data.get("price"), "price", positive=True)
+    if price is not None:  # e.g. a fund's current NAV, entered with the holding
+        from datetime import date
+
+        from .market.service import save_manual_price
+        save_manual_price(db, inst, price, date.today())
     audit(db, "holding", holding.id, "update" if before else "create", before=before, after=holding)
     return holding
 

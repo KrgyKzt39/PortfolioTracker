@@ -147,10 +147,37 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText("After market closes")).toHaveCount(0);
   });
 
+  test("fund or savings: EPF balance with amount put in", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("main").getByRole("button", { name: "Add", exact: true }).click();
+    const d = dialog(page);
+    await d.getByRole("radio", { name: "Fund or savings" }).click();
+    await d.getByLabel("Held with").selectOption("__new");
+    await d.getByLabel("New broker name").fill("KWSP");
+    await d.getByLabel("Fund name").fill("EPF");
+    await d.getByLabel("Balance or units").fill("85000");
+    await d.getByLabel(/Amount you put in/).fill("70000");
+    await d.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("EPF added")).toBeVisible();
+    const epf = page.getByRole("button", { name: "EPF details" });
+    await expect(epf).toContainText("85,000 balance");
+    await expect(epf).toContainText("+RM15,000.00");
+  });
+
+  test("dashboard shows the split and starts the value history", async ({ page }) => {
+    await page.goto("/#/dashboard");
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+    await expect(page.getByText("History builds up from today")).toBeVisible();
+    await page.getByRole("radio", { name: "Broker" }).click();
+    await expect(page.getByText("KWSP")).toBeVisible();
+    await page.getByRole("radio", { name: "Currency" }).click();
+    await expect(page.getByText("MYR", { exact: true })).toBeVisible();
+  });
+
   test("all tabs fit 375, 390 and 430px phones", async ({ page }) => {
     for (const width of [375, 390, 430]) {
       await page.setViewportSize({ width, height: 860 });
-      for (const tab of ["portfolio", "dividends", "calendar"]) {
+      for (const tab of ["portfolio", "dashboard", "dividends", "calendar"]) {
         await page.goto(`/#/${tab}`);
         await page.waitForLoadState("networkidle");
         await expect(page.getByRole("navigation")).toBeVisible();

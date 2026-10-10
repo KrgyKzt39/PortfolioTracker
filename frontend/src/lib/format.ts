@@ -6,6 +6,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 const SYMBOLS: Record<string, string> = { MYR: "RM", USD: "$", SGD: "S$", GBP: "£", HKD: "HK$" };
+
+/** Filled from /api/meta at startup so every supported currency gets its symbol. */
+export let CURRENCY_LIST: { code: string; name: string; symbol: string }[] = Object.entries(SYMBOLS).map(([code, symbol]) => ({ code, name: code, symbol }));
+export function setCurrencies(list: { code: string; name: string; symbol: string }[]) {
+  CURRENCY_LIST = list;
+  for (const c of list) SYMBOLS[c.code] = c.symbol;
+}
 export const HIDDEN = "••••••";
 
 export const currencySymbol = (ccy: string) => SYMBOLS[ccy] ?? `${ccy} `;

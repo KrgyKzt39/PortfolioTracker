@@ -2,12 +2,11 @@ import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
-import { cn, money, priceStr, today } from "../lib/format";
+import { CURRENCY_LIST, cn, money, priceStr, today } from "../lib/format";
 import { useBrokers, useCategories, useInstruments, useInvalidateAll, useOpenSheet } from "../lib/hooks";
 import type { Broker, Category, DividendEvent, Instrument, Payment } from "../lib/types";
-import { Button, ConfirmSheet, Field, Input, Select, Sheet, Spinner, Textarea, Toggle, useToast } from "./ui";
+import { Button, ConfirmSheet, Field, Input, Segmented, Select, Sheet, Spinner, Textarea, Toggle, useToast } from "./ui";
 
-const CURRENCIES = ["MYR", "USD", "SGD", "GBP", "HKD"];
 
 export function FormError({ error }: { error: string | null | undefined }) {
   if (!error) return null;
@@ -74,17 +73,23 @@ function useSubmit(onClose: () => void) {
 const pctToRate = (v: string) => (v === "" ? null : String(Number(v) / 100));
 const rateToPct = (v: string | null | undefined) => (v === null || v === undefined || v === "" ? "" : String(Number((Number(v) * 100).toFixed(4))));
 
+const SUFFIX_CCY: Record<string, string> = {
+  ".KL": "MYR", ".SI": "SGD", ".HK": "HKD", ".L": "GBP", ".T": "JPY", ".AX": "AUD", ".TO": "CAD", ".V": "CAD", ".PA": "EUR", ".DE": "EUR",
+  ".F": "EUR", ".AS": "EUR", ".MI": "EUR", ".MC": "EUR", ".BR": "EUR", ".SW": "CHF", ".SS": "CNY", ".SZ": "CNY", ".TW": "TWD", ".TWO": "TWD",
+  ".BK": "THB", ".JK": "IDR", ".KS": "KRW", ".KQ": "KRW", ".NS": "INR", ".BO": "INR", ".NZ": "NZD", ".ST": "SEK", ".OL": "NOK", ".CO": "DKK",
+  ".SA": "BRL", ".MX": "MXN", ".PS": "PHP",
+};
+/** Same rule as the server: listing currency from the exchange suffix, else USD. */
 function guessCcy(symbol: string) {
   const s = symbol.trim().toUpperCase();
-  if (s.endsWith(".KL")) return "MYR";
-  if (s.endsWith(".SI")) return "SGD";
-  if (s.endsWith(".HK")) return "HKD";
-  if (s.endsWith(".L")) return "GBP";
-  return "USD";
+  const suf = Object.keys(SUFFIX_CCY)
+    .sort((a, b) => b.length - a.length)
+    .find((x) => s.endsWith(x));
+  return suf ? SUFFIX_CCY[suf] : "USD";
 }
 
 /* ================================================================ Holding */
-type HoldingRow = { id: number; broker_id: number; instrument_id: number; symbol: string; quantity: string; avg_cost: string; broker: string };
+type HoldingRow = { id: number; broker_id: number; instrument_id: number; symbol: string; quantity: string; avg_cost: string; broker: string; kind: string; currency: string };
 type HoldingPreset = { symbol?: string; broker_id?: number; category_id?: number | null };
 
 export function HoldingSheet({ holdingId, preset, onClose }: { holdingId?: number; preset?: HoldingPreset; onClose: () => void }) {
@@ -105,12 +110,17 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
   const instruments = useInstruments();
   const { busy, run, fe, general } = useSubmit(onClose);
   const [confirm, setConfirm] = useState(false);
+  const presetInst = instruments.data?.find((i) => i.symbol === preset?.symbol);
+  const [isFund, setIsFund] = useState(existing ? existing.kind === "fund" : presetInst?.kind === "fund");
   const [v, setV] = useState({
     broker_id: String(existing?.broker_id ?? preset?.broker_id ?? ""),
     new_broker: "",
     symbol: existing?.symbol ?? preset?.symbol ?? "",
+    name: "",
     quantity: existing ? String(Number(existing.quantity)) : "",
     avg_cost: existing ? String(Number(existing.avg_cost)) : "",
+    total_cost: existing ? String(Number((Number(existing.quantity) * Number(existing.avg_cost)).toFixed(2))) : "",
+    price: "1.00",
     currency: "",
     category_id: preset?.category_id ? String(preset.category_id) : "",
   });
@@ -118,8 +128,9 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
   const brokerList = brokers.data ?? [];
   const noBrokers = brokers.isSuccess && brokerList.length === 0 && !existing;
   const known = instruments.data?.find((i) => i.symbol === v.symbol.trim().toUpperCase());
-  const ccy = known?.currency ?? (v.currency || (v.symbol ? guessCcy(v.symbol) : ""));
+  const ccy = existing?.currency ?? known?.currency ?? (v.currency || (v.symbol ? (isFund ? "MYR" : guessCcy(v.symbol)) : ""));
   const newBroker = noBrokers || v.broker_id === "__new";
+  const isNewStock = !existing && !known && v.symbol.trim() !== "";
 
   const save = () =>
     run(async () => {
@@ -129,13 +140,26 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
         brokerId = String(b.id);
         setV((x) => ({ ...x, broker_id: brokerId }));
       }
-      const body = { broker_id: Number(brokerId) || null, quantity: v.quantity, avg_cost: v.avg_cost };
+      const amounts = isFund ? { quantity: v.quantity, total_cost: v.total_cost } : { quantity: v.quantity, avg_cost: v.avg_cost };
+      const body = { broker_id: Number(brokerId) || null, ...amounts };
       if (existing) await api(`/holdings/${existing.id}`, { method: "PUT", body });
-      else await api("/holdings", { body: { ...body, symbol: v.symbol, currency: v.currency || null, category_id: v.category_id ? Number(v.category_id) : null } });
+      else
+        await api("/holdings", {
+          body: {
+            ...body,
+            symbol: v.symbol,
+            name: v.name || null,
+            kind: isNewStock && isFund ? "fund" : undefined,
+            price: isNewStock && isFund ? v.price : undefined,
+            currency: v.currency || (isNewStock && isFund ? "MYR" : null),
+            category_id: v.category_id ? Number(v.category_id) : null,
+          },
+        });
     }, existing ? "Holding updated" : `${v.symbol.trim().toUpperCase()} added`);
 
+  const title = existing ? `${existing.symbol} at ${existing.broker}` : isFund ? "Add fund or savings" : "Add holding";
   return (
-    <Sheet open onClose={onClose} title={existing ? `${existing.symbol} at ${existing.broker}` : "Add holding"} footer={<Footer onClose={onClose} onSave={save} busy={busy} onDelete={existing ? () => setConfirm(true) : undefined} />}>
+    <Sheet open onClose={onClose} title={title} footer={<Footer onClose={onClose} onSave={save} busy={busy} onDelete={existing ? () => setConfirm(true) : undefined} />}>
       <form
         className="space-y-3"
         onSubmit={(e) => {
@@ -144,15 +168,30 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
         }}
       >
         <FormError error={general} />
-        {!existing && <p className="text-xs text-muted">Copy the quantity and average price from your broker app.</p>}
+        {!existing && (
+          <Segmented
+            label="What are you adding"
+            value={isFund ? "fund" : "stock"}
+            onChange={(x) => setIsFund(x === "fund")}
+            options={[
+              { value: "stock", label: "Stock or ETF" },
+              { value: "fund", label: "Fund or savings" },
+            ]}
+          />
+        )}
+        {!existing && (
+          <p className="text-xs text-muted">
+            {isFund ? "EPF, ASB, ASNB, unit trusts and the like. Enter the balance and what you put in; update the balance whenever you check it." : "Copy the quantity and average price from your broker app."}
+          </p>
+        )}
         {brokers.isLoading ? (
-          <Field label="Broker">{(id) => <Input id={id} disabled placeholder="Loading…" />}</Field>
+          <Field label={isFund ? "Held with" : "Broker"}>{(id) => <Input id={id} disabled placeholder="Loading…" />}</Field>
         ) : noBrokers ? (
-          <Field label="Broker" error={fe("name")}>
-            {(id) => <Input id={id} value={v.new_broker} onChange={set("new_broker")} placeholder="e.g. Rakuten Trade" />}
+          <Field label={isFund ? "Held with" : "Broker"} error={fe("name")}>
+            {(id) => <Input id={id} value={v.new_broker} onChange={set("new_broker")} placeholder={isFund ? "e.g. KWSP, ASNB, Public Mutual" : "e.g. Rakuten Trade"} />}
           </Field>
         ) : (
-          <Field label="Broker" error={fe("broker_id") || fe("name")}>
+          <Field label={isFund ? "Held with" : "Broker"} error={fe("broker_id") || fe("name")}>
             {(id) => (
               <Select id={id} value={v.broker_id} onChange={set("broker_id")}>
                 <option value="">Select…</option>
@@ -161,44 +200,68 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
                     {b.name}
                   </option>
                 ))}
-                <option value="__new">＋ New broker…</option>
+                <option value="__new">＋ New…</option>
               </Select>
             )}
           </Field>
         )}
-        {v.broker_id === "__new" && <Input aria-label="New broker name" value={v.new_broker} onChange={set("new_broker")} placeholder="Broker name" />}
+        {v.broker_id === "__new" && <Input aria-label="New broker name" value={v.new_broker} onChange={set("new_broker")} placeholder={isFund ? "e.g. KWSP" : "Broker name"} />}
         {!existing && (
-          <Field label="Stock symbol" error={fe("symbol") || fe("currency")} hint="Bursa 1155.KL · US MSFT · SGX D05.SI · HK 0005.HK · funds: any short name, e.g. ASNB">
+          <Field
+            label={isFund ? "Fund name" : "Stock symbol"}
+            error={fe("symbol") || fe("currency")}
+            hint={isFund ? "A short name you'll recognise, e.g. EPF, ASB, Public Ittikal" : "Bursa 1155.KL · US MSFT · SGX D05.SI · HK 0005.HK · Tokyo 7203.T · ASX BHP.AX"}
+          >
             {(id) => (
               <>
-                <Input id={id} list="known-symbols" value={v.symbol} onChange={set("symbol")} placeholder="e.g. 1155.KL" autoCapitalize="characters" autoCorrect="off" />
+                <Input id={id} list="known-symbols" value={v.symbol} onChange={set("symbol")} placeholder={isFund ? "e.g. EPF" : "e.g. 1155.KL"} autoCapitalize="characters" autoCorrect="off" />
                 <datalist id="known-symbols">
-                  {(instruments.data ?? []).map((i) => (
-                    <option key={i.id} value={i.symbol}>
-                      {i.name ?? ""}
-                    </option>
-                  ))}
+                  {(instruments.data ?? [])
+                    .filter((i) => (i.kind === "fund") === isFund)
+                    .map((i) => (
+                      <option key={i.id} value={i.symbol}>
+                        {i.name ?? ""}
+                      </option>
+                    ))}
                 </datalist>
               </>
             )}
           </Field>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Quantity" error={fe("quantity")}>
-            {(id) => <Input id={id} inputMode="decimal" value={v.quantity} onChange={set("quantity")} placeholder="0" />}
+        {isFund ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={`Balance or units`} error={fe("quantity")} hint="EPF/ASB: your balance">
+              {(id) => <Input id={id} inputMode="decimal" value={v.quantity} onChange={set("quantity")} placeholder="0" />}
+            </Field>
+            <Field label={`Amount you put in${ccy ? ` (${ccy})` : ""}`} error={fe("total_cost") || fe("avg_cost")} hint="Total, not per unit">
+              {(id) => <Input id={id} inputMode="decimal" value={v.total_cost} onChange={set("total_cost")} placeholder="0.00" />}
+            </Field>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Quantity" error={fe("quantity")}>
+              {(id) => <Input id={id} inputMode="decimal" value={v.quantity} onChange={set("quantity")} placeholder="0" />}
+            </Field>
+            <Field label={`Average cost${ccy ? ` (${ccy})` : ""}`} error={fe("avg_cost")}>
+              {(id) => <Input id={id} inputMode="decimal" value={v.avg_cost} onChange={set("avg_cost")} placeholder="per share" />}
+            </Field>
+          </div>
+        )}
+        {isNewStock && isFund && (
+          <Field label="Price per unit (NAV)" error={fe("price")} hint="EPF and ASB stay at 1.00. For unit trusts, the latest NAV.">
+            {(id) => <Input id={id} inputMode="decimal" value={v.price} onChange={set("price")} />}
           </Field>
-          <Field label={`Average cost${ccy ? ` (${ccy})` : ""}`} error={fe("avg_cost")}>
-            {(id) => <Input id={id} inputMode="decimal" value={v.avg_cost} onChange={set("avg_cost")} placeholder="per share" />}
-          </Field>
-        </div>
-        {!existing && !known && v.symbol.trim() !== "" && (
+        )}
+        {isNewStock && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Currency">
               {(id) => (
                 <Select id={id} value={v.currency} onChange={set("currency")}>
-                  <option value="">{guessCcy(v.symbol)} (from symbol)</option>
-                  {CURRENCIES.map((c) => (
-                    <option key={c}>{c}</option>
+                  <option value="">{isFund ? "MYR" : `${guessCcy(v.symbol)} (from symbol)`}</option>
+                  {CURRENCY_LIST.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} · {c.name}
+                    </option>
                   ))}
                 </Select>
               )}

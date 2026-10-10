@@ -21,6 +21,7 @@ STOCKS = [
     ("JEPQ", "JPMorgan Nasdaq Equity Premium Income ETF", "USD", "etf", "auto", "Dividend",
      [("Longbridge", "308.58", "55.08")], "59.08", "6.40", "0.30"),
     ("ASNB", "ASNB fixed-price fund", "MYR", "fund", "manual", "Dividend", [("ASNB", "56020", "1.00")], "1.00", "0.0475", "0"),
+    ("EPF", "EPF Account 1 & 2 (balance)", "MYR", "fund", "manual", "Savings", [("KWSP", "85000", "0.82")], "1.00", None, "0"),
     ("MSFT", "Microsoft", "USD", "stock", "auto", "Growth", [("Longbridge", "15", "418.40"), ("Moomoo", "6.83", "439.89")],
      "497.12", None, "0.30"),
     ("AAPL", "Apple", "USD", "stock", "auto", "Growth", [("Longbridge", "23.62", "256.29")], "331.34", None, "0.30"),
@@ -53,11 +54,11 @@ def seed(db):
     for base, quote, rate in (("USD", "MYR", "4.08"), ("SGD", "MYR", "3.21"), ("GBP", "MYR", "5.51"), ("HKD", "MYR", "0.521")):
         db.add(FxRate(base=base, quote=quote, rate=D(rate), rate_date=today, source="manual"))
     cats = {}
-    for i, (name, show) in enumerate((("Dividend", True), ("Growth", False))):
+    for i, (name, show) in enumerate((("Dividend", True), ("Growth", False), ("Savings", False))):
         cats[name] = Category(name=name, show_dividends=show, sort_order=i)
         db.add(cats[name])
     brokers = {}
-    for i, name in enumerate(("Rakuten Trade", "Longbridge", "Moomoo", "ASNB")):
+    for i, name in enumerate(("Rakuten Trade", "Longbridge", "Moomoo", "ASNB", "KWSP")):
         brokers[name] = Broker(name=name, sort_order=i)
         db.add(brokers[name])
     db.flush()
@@ -75,6 +76,19 @@ def seed(db):
         for days, gross, tax in RECEIVED.get(sym, []):
             record_payment(db, {"instrument_id": inst.id, "broker_id": broker_id, "gross": gross, "tax": tax,
                                 "pay_date": (today - timedelta(days=days)).isoformat()})
+    # Six months of example value history for the Dashboard chart (demo database only).
+    import json
+    import math
+    from .models import ValuationSnapshot
+    from .valuation import build_portfolio
+    t = build_portfolio(db)["totals"]
+    now_v, now_c = Decimal(t["value"]), Decimal(t["cost"])
+    for n in range(180, 0, -1):
+        drift = Decimal(str(1 - n * 0.0006 + 0.012 * math.sin(n / 9) + 0.006 * math.sin(n / 2.3)))
+        v = (now_v * drift).quantize(Decimal("0.01"))
+        c = (now_c * Decimal(str(1 - n * 0.0002))).quantize(Decimal("0.01"))
+        db.add(ValuationSnapshot(snapshot_date=today - timedelta(days=n), base_currency="MYR", total_value=v,
+                                 total_cost=c, total_pl=v - c, detail=json.dumps([])))
     # Calendar: dividends (from Longbridge in real use for US stocks) and earnings dates.
     for sym, ex, pay, dps, status in (
         ("1155.KL", 10, 26, "0.30", "announced"),
