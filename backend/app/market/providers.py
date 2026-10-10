@@ -21,6 +21,7 @@ Unsupported funds (e.g. ASNB) use manual NAV entry.
 """
 from __future__ import annotations
 
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -280,15 +281,75 @@ class LongbridgeQuotes:
         us = us_symbol(inst)
         return f"{us}.US" if us else None
 
+    def _config(self):
+        try:
+            from longbridge.openapi import Config, Language
+        except ImportError as exc:
+            raise ProviderError("longbridge package not installed (run start.bat again)") from exc
+        return Config.from_apikey(*self._creds, language=Language.EN, enable_print_quote_packages=False)
+
     def _context(self):
         if self._ctx is None:
-            try:
-                from longbridge.openapi import Config, QuoteContext
-            except ImportError as exc:
-                raise ProviderError("longbridge package not installed (run start.bat again)") from exc
-            cfg = Config.from_apikey(*self._creds, enable_print_quote_packages=False)
-            self._ctx = QuoteContext(cfg)
+            from longbridge.openapi import QuoteContext
+            self._ctx = QuoteContext(self._config())
         return self._ctx
+
+    def _run(self, fn, timeout=None):
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            return pool.submit(fn).result(timeout=timeout or self.TIMEOUT_S)
+        except FutTimeout as exc:
+            raise ProviderError("timed out") from exc
+        except ProviderError:
+            raise
+        except Exception as exc:  # SDK raises its own OpenApiException
+            raise ProviderError(str(exc) or type(exc).__name__) from exc
+        finally:
+            pool.shutdown(wait=False)
+
+    def fetch_dividends(self, symbols: list[str], fundamental_ctx=None) -> tuple[dict[str, list[dict]], dict[str, str]]:
+        """Dividend history and announcements per symbol: [{ex_date, pay_date, amount, currency}]."""
+        def call():
+            ctx = fundamental_ctx
+            if ctx is None:
+                from longbridge.openapi import FundamentalContext
+                ctx = FundamentalContext(self._config())
+            out, errs = {}, {}
+            for sym in symbols:
+                try:
+                    out[sym] = [d for d in (parse_dividend(x) for x in ctx.dividend(sym).list) if d]
+                except Exception as exc:  # one bad symbol must not stop the rest
+                    errs[sym] = str(exc) or type(exc).__name__
+            return out, errs
+        return self._run(call, timeout=60)
+
+    def fetch_earnings(self, symbols: set[str], start: date, days: int = 90, calendar_ctx=None) -> list[dict]:
+        """Earnings dates for the given symbols, scanning the market-wide calendar in 14-day windows."""
+        markets = sorted({s.rsplit(".", 1)[-1] for s in symbols})
+
+        def call():
+            from datetime import timedelta
+            ctx = calendar_ctx
+            if ctx is None:
+                from longbridge.openapi import CalendarContext
+                ctx = CalendarContext(self._config())
+            category = _report_category()
+            found = []
+            for market in markets:
+                d = start
+                while d < start + timedelta(days=days):
+                    end = min(d + timedelta(days=13), start + timedelta(days=days))
+                    resp = ctx.finance_calendar(category, d.isoformat(), end.isoformat(), market, 1000)
+                    for group in resp.list:
+                        for info in group.infos:
+                            if info.symbol in symbols:
+                                e = parse_earnings(info)
+                                if e:
+                                    found.append(e)
+                    d = end + timedelta(days=1)
+            return found
+        return self._run(call, timeout=90)
 
     def fetch_prices(self, symbols: list[str]) -> tuple[dict[str, PriceQuote], dict[str, str]]:
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
@@ -327,3 +388,40 @@ class LongbridgeQuotes:
             if sym not in quotes and sym not in errors:
                 errors[sym] = "no quote returned (check your Longbridge quote permissions for this market)"
         return quotes, errors
+
+
+_DPS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([A-Z]{3})\b")
+
+
+def _lb_date(v: str) -> date | None:
+    v = (v or "").strip()[:10].replace(".", "-").replace("/", "-")
+    try:
+        return date.fromisoformat(v)
+    except ValueError:
+        return None
+
+
+def parse_dividend(item) -> dict | None:
+    """Longbridge DividendItem -> dict. Only cash dividends with an explicit amount and currency."""
+    m = _DPS_RE.search(item.desc or "")
+    ex = _lb_date(item.ex_date)
+    if not m or not ex:
+        return None
+    amount = Decimal(m.group(1))
+    if amount <= 0:
+        return None
+    return {"ex_date": ex, "pay_date": _lb_date(item.payment_date), "amount": amount, "currency": m.group(2)}
+
+
+def parse_earnings(info) -> dict | None:
+    d = _lb_date(info.date)
+    if not d:
+        return None
+    t = f"{getattr(info, 'financial_market_time', '')} {getattr(info, 'date_type', '')}".lower()
+    session = "before" if ("before" in t or "pre" in t or "盘前" in t) else "after" if ("after" in t or "post" in t or "盘后" in t) else None
+    return {"symbol": info.symbol, "date": d, "session": session, "title": (info.content or "")[:120] or None}
+
+
+def _report_category():
+    from longbridge.openapi import CalendarCategory
+    return CalendarCategory.Report

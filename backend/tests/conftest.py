@@ -41,14 +41,18 @@ class Api:
         assert r.status_code in (code if isinstance(code, tuple) else (code,)), r.text
         return r.json()
 
-    def account(self, name="Main", **kw):
-        return self.ok(self.c.post("/api/accounts", json={"name": name, **kw}))
+    def broker(self, name="Rakuten Trade"):
+        return self.ok(self.c.post("/api/brokers", json={"name": name}))
 
-    def instrument(self, symbol, currency=None, **kw):
-        return self.ok(self.c.post("/api/instruments", json={"symbol": symbol, "currency": currency, **kw}))
+    def category(self, name, show_dividends=False):
+        return self.ok(self.c.post("/api/categories", json={"name": name, "show_dividends": show_dividends}))
 
-    def txn(self, **kw):
-        return self.ok(self.c.post("/api/transactions?allow_duplicate=true", json=kw))
+    def holding(self, broker_id, symbol, quantity, avg_cost, **kw):
+        return self.ok(self.c.post("/api/holdings", json={"broker_id": broker_id, "symbol": symbol,
+                                                          "quantity": str(quantity), "avg_cost": str(avg_cost), **kw}))
+
+    def instrument_id(self, symbol):
+        return next(i["id"] for i in self.ok(self.c.get("/api/instruments")) if i["symbol"] == symbol)
 
     def price(self, inst_id, price, on=None):
         return self.ok(self.c.post("/api/prices", json={"instrument_id": inst_id, "price": str(price), "date": on}))
@@ -63,3 +67,11 @@ class Api:
 @pytest.fixture()
 def api(client):
     return Api(client)
+
+
+def row(pf, symbol):
+    return next(h for c in pf["categories"] for h in c["holdings"] if h["symbol"] == symbol)
+
+
+def card(pf, name):
+    return next(c for c in pf["categories"] if c["name"] == name)

@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from .. import config
 from ..db import session_scope
-from ..models import CURRENCIES, FxRate, Instrument, PriceHistory, utcnow
+from ..models import CURRENCIES, DividendEvent, EarningsDate, FxRate, Holding, Instrument, PriceHistory, utcnow
 from ..services import get_settings
 from .providers import AlpacaData, AlphaVantage, FrankfurterFx, LongbridgeQuotes, ProviderError, YahooChart
 
@@ -43,6 +43,9 @@ class RefreshState:
 STATE = RefreshState()
 _client_factory = lambda: httpx.Client(follow_redirects=True)  # noqa: E731  (patched in tests)
 _longbridge_ctx = None  # injected in tests; otherwise the SDK connects on first use
+_longbridge_fundamental = None
+_longbridge_calendar = None
+EVENTS_EVERY_HOURS = 12
 
 
 def price_providers(client, settings: dict) -> list:
@@ -86,7 +89,8 @@ def refresh_all() -> dict:
     results, errors = {}, {}
     with session_scope() as db:
         settings = get_settings(db)
-        instruments = list(db.scalars(select(Instrument).where(Instrument.price_mode == "auto")))
+        held = select(Holding.instrument_id)
+        instruments = list(db.scalars(select(Instrument).where(Instrument.price_mode == "auto", Instrument.id.in_(held))))
     with _client_factory() as client:
         yahoo = YahooChart(client) if settings["yahoo_enabled"] else None
         av = AlphaVantage(client, config.ALPHAVANTAGE_API_KEY) if config.ALPHAVANTAGE_API_KEY else None
@@ -144,6 +148,14 @@ def refresh_all() -> dict:
             errors[inst.symbol] = "; ".join(tried[iid]) or (
                 "no enabled provider covers this symbol (enter a manual price, or enable Yahoo for .KL)")
 
+    if settings["longbridge_enabled"] and config.longbridge_configured():
+        try:
+            n = refresh_events()
+            if n is not None:
+                results["dividend & earnings dates"] = f"longbridge ({n} stocks)"
+        except ProviderError as exc:
+            errors["dividend & earnings dates"] = f"longbridge: {exc}"
+
     from ..snapshots import write_snapshot
     try:
         with session_scope() as db:
@@ -193,3 +205,56 @@ def save_manual_price(db, inst: Instrument, price: Decimal, on, currency: str | 
     else:
         row.price, row.fetched_at = price, utcnow()
     return row
+
+
+def refresh_events(force: bool = False) -> int | None:
+    """Pull dividend dates and earnings dates from Longbridge for stocks you hold (US/HK/SG).
+    Runs at most every EVENTS_EVERY_HOURS unless forced. Manual entries are never overwritten."""
+    from datetime import date, timedelta
+
+    lb = LongbridgeQuotes(config.LONGBRIDGE_APP_KEY, config.LONGBRIDGE_APP_SECRET, config.LONGBRIDGE_ACCESS_TOKEN,
+                          ctx=_longbridge_ctx)
+    with session_scope() as db:
+        held_ids = {h.instrument_id for h in db.scalars(select(Holding))}
+        due = {}
+        for inst in db.scalars(select(Instrument).where(Instrument.id.in_(held_ids))):
+            sym = lb.map_symbol(inst)
+            fresh = inst.events_checked_at and utcnow() - inst.events_checked_at < timedelta(hours=EVENTS_EVERY_HOURS)
+            if sym and (force or not fresh):
+                due[sym] = inst.id
+    if not due:
+        return None
+    today = date.today()
+    divs, _errs = lb.fetch_dividends(sorted(due), fundamental_ctx=_longbridge_fundamental)
+    earnings = lb.fetch_earnings(set(due), today, calendar_ctx=_longbridge_calendar)
+    with session_scope() as db:
+        for sym, iid in due.items():
+            inst = db.get(Instrument, iid)
+            for d in divs.get(sym, []):
+                if d["ex_date"] < today - timedelta(days=400) or d["currency"] != inst.currency:
+                    continue
+                ev = db.scalar(select(DividendEvent).where(DividendEvent.instrument_id == iid,
+                                                           DividendEvent.ex_date == d["ex_date"]))
+                status = "announced" if (d["pay_date"] or d["ex_date"]) > today else "pending"
+                if ev is None:
+                    db.add(DividendEvent(instrument_id=iid, ex_date=d["ex_date"], pay_date=d["pay_date"],
+                                         amount_per_share=d["amount"], currency=d["currency"], status=status,
+                                         source="longbridge"))
+                elif ev.source == "longbridge" and ev.status != "received":
+                    ev.pay_date, ev.amount_per_share, ev.status = d["pay_date"], d["amount"], status
+            if sym in divs:
+                inst.events_checked_at = utcnow()
+            for er in db.scalars(select(EarningsDate).where(EarningsDate.instrument_id == iid,
+                                                            EarningsDate.source == "longbridge",
+                                                            EarningsDate.date >= today)):
+                db.delete(er)
+        db.flush()
+        for e in earnings:
+            iid = due.get(e["symbol"])
+            if iid is None:
+                continue
+            if db.scalar(select(EarningsDate).where(EarningsDate.instrument_id == iid, EarningsDate.date == e["date"])):
+                continue
+            db.add(EarningsDate(instrument_id=iid, date=e["date"], session=e["session"], title=e["title"],
+                                source="longbridge"))
+    return len(due)

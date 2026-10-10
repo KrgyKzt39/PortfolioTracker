@@ -10,7 +10,7 @@ from app import config
 from app.market import service
 from app.market.providers import LongbridgeQuotes, quality_from_age
 
-from test_api import ago, holding
+from conftest import row
 
 
 def now_utc():
@@ -59,13 +59,11 @@ def alpaca_transport(seen, prices, ts=None):
 
 
 def setup_portfolio(api):
-    a = api.account("G")
-    ids = {}
+    a = api.broker("G")
     for sym in ("MSFT", "BRK-B", "0005.HK", "D05.SI", "1155.KL"):
-        i = api.instrument(sym)
-        ids[sym] = i["id"]
-        api.txn(type="BUY", trade_date=ago(5), account_id=a["id"], instrument_id=i["id"], quantity="1", price="1")
-    return ids
+        api.holding(a["id"], sym, 1, 1)
+    for q, r in (("MYR", "4.5"), ("SGD", "1.3"), ("GBP", "0.75"), ("HKD", "7.8")):
+        api.fx("USD", q, r)
 
 
 def test_symbol_mapping():
@@ -91,7 +89,7 @@ def test_quality_from_quote_age():
 
 
 def test_longbridge_first_then_alpaca_then_nothing_for_kl(api, creds, monkeypatch):
-    ids = setup_portfolio(api)
+    setup_portfolio(api)
     lb = FakeLbCtx({"MSFT.US": "500.10", "5.HK": "101.5", "D05.SG": "40.2"})  # no BRK.B quote
     monkeypatch.setattr(service, "_longbridge_ctx", lb)
     seen = []
@@ -104,10 +102,10 @@ def test_longbridge_first_then_alpaca_then_nothing_for_kl(api, creds, monkeypatc
     assert seen[0].url.params["symbols"] == "BRK.B"  # only what Longbridge could not price
     assert "1155.KL" in out["errors"] and "no enabled provider" in out["errors"]["1155.KL"]
     pf = api.portfolio("USD")
-    h = holding(pf, "G", "MSFT")
+    h = row(pf, "MSFT")
     assert D(h["price"]) == D("500.10") and h["price_source"] == "longbridge" and h["price_status"] == "Live"
-    assert holding(pf, "G", "BRK-B")["price_status"] == "Live"
-    assert holding(pf, "G", "1155.KL")["price_status"] == "Unavailable"
+    assert row(pf, "BRK-B")["price_status"] == "Live"
+    assert row(pf, "1155.KL")["price_status"] == "Unavailable"
 
 
 def test_longbridge_down_falls_back_to_alpaca(api, creds, monkeypatch):
@@ -128,5 +126,82 @@ def test_old_quote_is_not_live(api, creds, monkeypatch):
     monkeypatch.setattr(service, "_client_factory",
                         lambda: httpx.Client(transport=alpaca_transport([], {"MSFT": 499}, ts=old)))
     service.refresh_all()
-    h = holding(api.portfolio(), "G", "MSFT")
+    h = row(api.portfolio(), "MSFT")
     assert h["price_source"] == "alpaca" and h["price_status"] == "Delayed"  # market closed: last trade
+
+
+class FakeFundamental:
+    def __init__(self, data):
+        self.data = data
+
+    def dividend(self, sym):
+        @dataclass
+        class Item:
+            desc: str
+            ex_date: str
+            payment_date: str
+            record_date: str = ""
+            symbol: str = ""
+            id: str = ""
+
+        @dataclass
+        class Resp:
+            list: list
+
+        return Resp([Item(*x) for x in self.data.get(sym, [])])
+
+
+class FakeCalendar:
+    def __init__(self, items):
+        self.items, self.calls = items, []
+
+    def finance_calendar(self, category, start, end, market, count):
+        self.calls.append((start, end, market))
+
+        @dataclass
+        class Info:
+            symbol: str
+            date: str
+            content: str
+            date_type: str = ""
+            financial_market_time: str = ""
+
+        @dataclass
+        class Group:
+            date: str
+            infos: list
+
+        @dataclass
+        class Resp:
+            list: list
+
+        groups = [Group(d, [Info(s, d, "Q3 results", "After Market")]) for s, d in self.items if start <= d.replace(".", "-") <= end]
+        return Resp(groups)
+
+
+def test_longbridge_dividend_and_earnings_dates(api, creds, monkeypatch):
+    a = api.broker("LB")
+    api.holding(a["id"], "MSFT", 10, 400)
+    api.holding(a["id"], "1155.KL", 100, 10)
+    iid = api.instrument_id("MSFT")
+    soon = (date.today() + timedelta(days=30)).strftime("%Y.%m.%d")
+    paid = (date.today() + timedelta(days=51)).strftime("%Y.%m.%d")
+    past = (date.today() - timedelta(days=90)).strftime("%Y.%m.%d")
+    past_pay = (date.today() - timedelta(days=70)).strftime("%Y.%m.%d")
+    manual_ex = (date.today() - timedelta(days=180)).isoformat()
+    api.ok(api.c.post("/api/dividends/events", json={"instrument_id": iid, "ex_date": manual_ex, "amount_per_share": "1.11"}))
+    monkeypatch.setattr(service, "_longbridge_fundamental", FakeFundamental({"MSFT.US": [
+        ("Dividend per share 0.98 USD", soon, paid), ("每股派息 0.91 USD", past, past_pay),
+        ("Stock dividend 1 for 10", past, past_pay), ("Dividend 0.91 USD", manual_ex.replace("-", "."), past_pay)]}))
+    earn = (date.today() + timedelta(days=18)).strftime("%Y.%m.%d")
+    cal = FakeCalendar([("MSFT.US", earn), ("TSLA.US", earn)])
+    monkeypatch.setattr(service, "_longbridge_calendar", cal)
+    assert service.refresh_events() == 1  # only MSFT maps to Longbridge
+    evs = {e["ex_date"]: e for e in api.ok(api.c.get("/api/dividends/events"))}
+    assert evs[soon.replace(".", "-")]["status"] == "announced" and D(evs[soon.replace(".", "-")]["amount_per_share"]) == D("0.98")
+    assert evs[past.replace(".", "-")]["status"] == "pending"
+    assert D(evs[manual_ex]["amount_per_share"]) == D("1.11")  # manual entry never overwritten
+    cal_items = api.ok(api.c.get("/api/calendar"))
+    assert [(c["kind"], c["symbol"], c.get("session")) for c in cal_items if c["kind"] == "earnings"] == [("earnings", "MSFT", "after")]
+    assert {m for _, _, m in cal.calls} == {"US"}
+    assert service.refresh_events() is None  # not due again for 12 hours

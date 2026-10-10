@@ -1,10 +1,7 @@
 # TODO / deferred
 
-- XIRR and time-weighted return once the ledger has been used with real data for a while.
-- Valuation history chart from `valuation_snapshots` (data is already recorded daily and after each refresh).
-- Optional auto-fill of FX rate on trades from stored historical rates.
-- FIFO / specific-lot cost methods (weighted average only today).
-- Corporate actions beyond splits (bonus issues, rights, mergers).
-- Service worker for offline viewing (requires HTTPS; see README remote-access note).
-- Optional Tailscale-based remote access guide with HTTPS certificate.
-- Verify Yahoo / Frankfurter / Alpha Vantage against live endpoints on the target PC.
+- Visual theme refresh.
+- Hosted multi-user version (see the product notes in chat): auth, per-user data, cloud database.
+- Portfolio value history chart from `valuation_snapshots` (already recorded daily).
+- Optional AI portfolio summary (concentration, currency exposure, dividend calendar in plain language).
+- Verify price sources against live endpoints on the target PC.

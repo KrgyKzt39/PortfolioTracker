@@ -1,32 +1,27 @@
-"""HTTP API. All money values are returned as decimal strings."""
+"""HTTP API. Money values are returned as decimal strings."""
 from __future__ import annotations
 
 import json
 import shutil
 import tempfile
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from . import backup, config, csv_io, dividends
+from . import backup, config, dividends
 from .db import get_session
-from .fx import FxTable
+from .holdings import ValidationError, delete_holding, export_csv, process_import, save_holding, to_decimal
 from .jsonutil import DecimalJSONResponse, DecimalRoute
 from .market import service as market
-from .models import (
-    CURRENCIES, DIVIDEND_STATUSES, TXN_TYPES, Account, AuditLog, DividendEvent, FxRate, Instrument,
-    PriceHistory, Transaction, ValuationSnapshot, utcnow,
-)
+from .models import (CURRENCIES, AuditLog, Broker, Category, DividendEvent, DividendPayment, EarningsDate, FxRate,
+                     Holding, Instrument, PriceHistory, ValuationSnapshot, utcnow)
 from .services import audit, get_settings, row_dict, set_settings
-from .transactions import (
-    DuplicateError, ValidationError, create_txn, delete_txn, txn_out, update_txn, validate_ledger,
-)
 from .valuation import build_portfolio
 
 router = APIRouter(prefix="/api", default_response_class=DecimalJSONResponse, route_class=DecimalRoute)
@@ -34,24 +29,27 @@ DB = Depends(get_session)
 
 
 def fail(exc: Exception, status=422):
-    if isinstance(exc, DuplicateError):
-        raise HTTPException(409, {"message": str(exc), "field": "duplicate", "duplicate_ids": exc.ids})
-    field = getattr(exc, "field", None)
-    raise HTTPException(status, {"message": str(exc), "field": field})
+    raise HTTPException(status, {"message": str(exc), "field": getattr(exc, "field", None)})
 
 
-def dec(v, field, required=False, positive=False):
-    if v in (None, ""):
-        if required:
-            raise ValidationError(f"{field} is required", field)
-        return None
+def found(obj, what="Not found"):
+    if obj is None:
+        raise HTTPException(404, {"message": what, "field": None})
+    return obj
+
+
+def write(db: Session, fn):
+    """Run a write; commit on success, roll back and return 422 on validation errors."""
     try:
-        d = Decimal(str(v))
-    except InvalidOperation as exc:
-        raise ValidationError(f"{field} must be a number", field) from exc
-    if positive and d <= 0:
-        raise ValidationError(f"{field} must be positive", field)
-    return d
+        out = fn()
+        db.commit()
+        return out
+    except IntegrityError:
+        db.rollback()
+        fail(ValidationError("That conflicts with existing data"))
+    except (ValidationError, ValueError) as exc:
+        db.rollback()
+        fail(exc)
 
 
 # ---------------------------------------------------------------- meta / settings
@@ -64,9 +62,8 @@ def health(db: Session = DB):
 @router.get("/meta")
 def meta():
     from .netinfo import lan_addresses
-    return {"currencies": CURRENCIES, "transaction_types": TXN_TYPES, "dividend_statuses": DIVIDEND_STATUSES,
-            "demo": config.DEMO, "db_path": str(config.DB_PATH.name), "lan_urls":
-            [f"http://{ip}:{config.PORT}" for ip in lan_addresses()] if config.HOST in ("0.0.0.0", "") else [],
+    return {"currencies": CURRENCIES, "demo": config.DEMO, "db_path": config.DB_PATH.name,
+            "lan_urls": [f"http://{ip}:{config.PORT}" for ip in lan_addresses()] if config.HOST in ("0.0.0.0", "") else [],
             "alphavantage_configured": bool(config.ALPHAVANTAGE_API_KEY),
             "alpaca_configured": config.alpaca_configured(), "longbridge_configured": config.longbridge_configured()}
 
@@ -78,7 +75,7 @@ def read_settings(db: Session = DB):
 
 @router.put("/settings")
 def write_settings(body: dict, db: Session = DB):
-    try:
+    def go():
         if "base_currency" in body and body["base_currency"] not in CURRENCIES:
             raise ValidationError("unsupported base currency", "base_currency")
         for k in ("refresh_interval_minutes", "stale_after_minutes"):
@@ -86,17 +83,14 @@ def write_settings(body: dict, db: Session = DB):
                 body[k] = int(body[k])
                 if body[k] < 5:
                     raise ValidationError(f"{k} must be at least 5", k)
-        out = set_settings(db, body)
-        db.commit()
-    except ValueError as exc:
-        db.rollback()
-        fail(exc)
+        return set_settings(db, body)
+    out = write(db, go)
     from .scheduler import reschedule
     reschedule()
     return out
 
 
-# ---------------------------------------------------------------- portfolio
+# ---------------------------------------------------------------- portfolio & layout
 @router.get("/portfolio")
 def portfolio(base: str | None = None, db: Session = DB):
     if base and base not in CURRENCIES:
@@ -106,111 +100,150 @@ def portfolio(base: str | None = None, db: Session = DB):
     return pf
 
 
-@router.get("/snapshots")
-def snapshots(db: Session = DB):
-    rows = db.scalars(select(ValuationSnapshot).order_by(ValuationSnapshot.snapshot_date))
-    return [{"date": r.snapshot_date, "base_currency": r.base_currency, "value": r.total_value,
-             "cost": r.total_cost, "pl": r.total_pl} for r in rows]
+@router.put("/layout")
+def save_layout(body: dict, db: Session = DB):
+    """Result of drag and drop: {categories: [{id: category id or null, instrument_ids: [...]}, ...]}."""
+    def go():
+        cats = {c.id: c for c in db.scalars(select(Category))}
+        for pos, group in enumerate(body.get("categories") or []):
+            cid = group.get("id")
+            if cid is not None:
+                if cid not in cats:
+                    raise ValidationError("unknown category")
+                cats[cid].sort_order = pos
+            for order, iid in enumerate(group.get("instrument_ids") or []):
+                inst = db.get(Instrument, iid)
+                if inst is None:
+                    raise ValidationError("unknown stock")
+                inst.category_id, inst.sort_order = cid, order
+        audit(db, "layout", None, "update", after={"categories": body.get("categories")})
+        return {"ok": True}
+    return write(db, go)
 
 
-# ---------------------------------------------------------------- accounts
-def _account_fields(db, body: dict, acct: Account | None = None) -> dict:
-    name = (body.get("name", acct.name if acct else "") or "").strip()
+# ---------------------------------------------------------------- categories & brokers
+def _name(db, model, body, obj=None, limit=60):
+    name = (body.get("name", obj.name if obj else "") or "").strip()
     if not name:
         raise ValidationError("name is required", "name")
-    layout = body.get("layout", acct.layout if acct else "growth")
-    if layout not in ("dividend", "growth"):
-        raise ValidationError("layout must be dividend or growth", "layout")
-    ccy = (body.get("currency", acct.currency if acct else "MYR") or "").upper()
-    if ccy not in CURRENCIES:
-        raise ValidationError("unsupported currency", "currency")
-    clash = db.scalar(select(Account).where(Account.name == name))
-    if clash and (acct is None or clash.id != acct.id):
-        raise ValidationError("an account with this name exists", "name")
-    return {"name": name, "layout": layout, "currency": ccy,
-            "broker": body.get("broker", acct.broker if acct else None),
-            "track_cash": bool(body.get("track_cash", acct.track_cash if acct else False)),
-            "sort_order": int(body.get("sort_order", acct.sort_order if acct else 0) or 0),
-            "archived": bool(body.get("archived", acct.archived if acct else False)),
-            "notes": body.get("notes", acct.notes if acct else None)}
+    if len(name) > limit:
+        raise ValidationError("name is too long", "name")
+    clash = db.scalar(select(model).where(model.name == name))
+    if clash and (obj is None or clash.id != obj.id):
+        raise ValidationError("that name is already used", "name")
+    return name
 
 
-@router.get("/accounts")
-def list_accounts(db: Session = DB):
-    return [row_dict(a) for a in db.scalars(select(Account).order_by(Account.sort_order, Account.id))]
+@router.get("/categories")
+def list_categories(db: Session = DB):
+    return [row_dict(c) for c in db.scalars(select(Category).order_by(Category.sort_order, Category.id))]
 
 
-@router.post("/accounts", status_code=201)
-def create_account(body: dict, db: Session = DB):
-    try:
-        a = Account(**_account_fields(db, body))
-        db.add(a)
+@router.post("/categories", status_code=201)
+def create_category(body: dict, db: Session = DB):
+    def go():
+        last = max((c.sort_order for c in db.scalars(select(Category))), default=-1)
+        c = Category(name=_name(db, Category, body), show_dividends=bool(body.get("show_dividends")), sort_order=last + 1)
+        db.add(c)
         db.flush()
-        audit(db, "account", a.id, "create", after=a)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return row_dict(a)
+        audit(db, "category", c.id, "create", after=c)
+        return row_dict(c)
+    return write(db, go)
 
 
-@router.put("/accounts/{acct_id}")
-def update_account(acct_id: int, body: dict, db: Session = DB):
-    a = db.get(Account, acct_id) or fail(ValidationError("not found"), 404)
-    try:
-        before = row_dict(a)
-        for k, v in _account_fields(db, body, a).items():
-            setattr(a, k, v)
-        audit(db, "account", a.id, "update", before=before, after=a)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return row_dict(a)
+@router.put("/categories/{cid}")
+def update_category(cid: int, body: dict, db: Session = DB):
+    c = found(db.get(Category, cid))
+
+    def go():
+        before = row_dict(c)
+        c.name = _name(db, Category, body, c)
+        if "show_dividends" in body:
+            c.show_dividends = bool(body["show_dividends"])
+        audit(db, "category", c.id, "update", before=before, after=c)
+        return row_dict(c)
+    return write(db, go)
 
 
-@router.delete("/accounts/{acct_id}")
-def delete_account(acct_id: int, db: Session = DB):
-    a = db.get(Account, acct_id) or fail(ValidationError("not found"), 404)
-    used = db.scalar(select(Transaction.id).where(or_(Transaction.account_id == acct_id,
-                                                      Transaction.to_account_id == acct_id)).limit(1))
-    if used:
-        fail(ValidationError("Account has transactions. Delete them first or archive the account."), 409)
-    audit(db, "account", a.id, "delete", before=a)
-    db.delete(a)
-    db.commit()
-    return {"ok": True}
+@router.delete("/categories/{cid}")
+def delete_category(cid: int, db: Session = DB):
+    c = found(db.get(Category, cid))
+
+    def go():
+        for inst in db.scalars(select(Instrument).where(Instrument.category_id == cid)):
+            inst.category_id = None  # its stocks move to Uncategorised; nothing else is deleted
+        audit(db, "category", c.id, "delete", before=c)
+        db.delete(c)
+        return {"ok": True}
+    return write(db, go)
 
 
-# ---------------------------------------------------------------- instruments
-def _instrument_fields(db, body: dict, inst: Instrument | None = None) -> dict:
-    g = lambda k, d=None: body.get(k, getattr(inst, k) if inst else d)  # noqa: E731
-    sym = (g("symbol", "") or "").strip().upper()
-    if not sym:
-        raise ValidationError("symbol is required", "symbol")
-    clash = db.scalar(select(Instrument).where(Instrument.symbol == sym))
-    if clash and (inst is None or clash.id != inst.id):
-        raise ValidationError("symbol already exists", "symbol")
-    ccy = (g("currency") or csv_io.guess_currency(sym)).upper()
-    if ccy not in CURRENCIES:
-        raise ValidationError("unsupported currency", "currency")
-    if inst and ccy != inst.currency and db.scalar(select(Transaction.id).where(Transaction.instrument_id == inst.id).limit(1)):
-        raise ValidationError("cannot change currency of an instrument with transactions", "currency")
-    kind = g("kind", "stock")
-    if kind not in ("stock", "etf", "reit", "fund", "other"):
-        raise ValidationError("invalid kind", "kind")
-    mode = g("price_mode", "auto")
-    if mode not in ("auto", "manual"):
-        raise ValidationError("price_mode must be auto or manual", "price_mode")
-    wht = dec(g("withholding_tax_rate", 0), "withholding_tax_rate") or Decimal(0)
-    if not (0 <= wht < 1):
-        raise ValidationError("withholding rate must be between 0 and 1 (0.3 = 30%)", "withholding_tax_rate")
+@router.get("/brokers")
+def list_brokers(db: Session = DB):
+    counts: dict[int, int] = {}
+    for h in db.scalars(select(Holding)):
+        counts[h.broker_id] = counts.get(h.broker_id, 0) + 1
+    return [{**row_dict(b), "holdings": counts.get(b.id, 0)}
+            for b in db.scalars(select(Broker).order_by(Broker.sort_order, Broker.name))]
+
+
+@router.post("/brokers", status_code=201)
+def create_broker(body: dict, db: Session = DB):
+    def go():
+        b = Broker(name=_name(db, Broker, body, limit=80), notes=body.get("notes"))
+        db.add(b)
+        db.flush()
+        audit(db, "broker", b.id, "create", after=b)
+        return row_dict(b)
+    return write(db, go)
+
+
+@router.put("/brokers/{bid}")
+def update_broker(bid: int, body: dict, db: Session = DB):
+    b = found(db.get(Broker, bid))
+
+    def go():
+        before = row_dict(b)
+        b.name = _name(db, Broker, body, b, limit=80)
+        b.notes = body.get("notes", b.notes)
+        audit(db, "broker", b.id, "update", before=before, after=b)
+        return row_dict(b)
+    return write(db, go)
+
+
+@router.delete("/brokers/{bid}")
+def delete_broker(bid: int, db: Session = DB):
+    b = found(db.get(Broker, bid))
+    if db.scalar(select(Holding.id).where(Holding.broker_id == bid).limit(1)):
+        fail(ValidationError("This broker still has holdings. Remove them first."), 409)
+
+    def go():
+        audit(db, "broker", b.id, "delete", before=b)
+        db.delete(b)
+        return {"ok": True}
+    return write(db, go)
+
+
+# ---------------------------------------------------------------- instruments & holdings
+def _instrument_fields(db, body: dict, inst: Instrument) -> dict:
+    def g(k):
+        return body.get(k, getattr(inst, k))
+    if g("kind") not in ("stock", "etf", "reit", "fund", "other"):
+        raise ValidationError("invalid type", "kind")
+    if g("price_mode") not in ("auto", "manual"):
+        raise ValidationError("pricing must be auto or manual", "price_mode")
+    wht = to_decimal(g("withholding_tax_rate"), "withholding_tax_rate") or Decimal(0)
+    if wht >= 1:
+        raise ValidationError("withholding rate must be below 1 (0.3 = 30%)", "withholding_tax_rate")
+    cat = g("category_id")
+    if cat and db.get(Category, cat) is None:
+        raise ValidationError("unknown category", "category_id")
     freq = g("dividend_frequency")
-    return {"symbol": sym, "name": g("name"), "currency": ccy, "kind": kind, "price_mode": mode,
-            "provider_symbol": (g("provider_symbol") or None),
-            "annual_dividend_per_share": dec(g("annual_dividend_per_share"), "annual_dividend_per_share"),
-            "dividend_frequency": int(freq) if freq not in (None, "") else None,
-            "withholding_tax_rate": wht, "notes": g("notes")}
+    return {"name": g("name") or None, "kind": g("kind"), "price_mode": g("price_mode"),
+            "provider_symbol": g("provider_symbol") or None,
+            "annual_dividend_per_share": to_decimal(g("annual_dividend_per_share"), "annual_dividend_per_share"),
+            "dividend_frequency": int(freq) if freq not in (None, "") else None, "withholding_tax_rate": wht,
+            "category_id": cat or None, "notes": g("notes")}
 
 
 @router.get("/instruments")
@@ -218,144 +251,67 @@ def list_instruments(db: Session = DB):
     return [row_dict(i) for i in db.scalars(select(Instrument).order_by(Instrument.symbol))]
 
 
-@router.post("/instruments", status_code=201)
-def create_instrument(body: dict, db: Session = DB):
-    try:
-        i = Instrument(**_instrument_fields(db, body))
-        db.add(i)
-        db.flush()
-        audit(db, "instrument", i.id, "create", after=i)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return row_dict(i)
+@router.put("/instruments/{iid}")
+def update_instrument(iid: int, body: dict, db: Session = DB):
+    i = found(db.get(Instrument, iid))
 
-
-@router.put("/instruments/{inst_id}")
-def update_instrument(inst_id: int, body: dict, db: Session = DB):
-    i = db.get(Instrument, inst_id) or fail(ValidationError("not found"), 404)
-    try:
+    def go():
         before = row_dict(i)
         for k, v in _instrument_fields(db, body, i).items():
             setattr(i, k, v)
         audit(db, "instrument", i.id, "update", before=before, after=i)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return row_dict(i)
+        return row_dict(i)
+    return write(db, go)
 
 
-@router.delete("/instruments/{inst_id}")
-def delete_instrument(inst_id: int, db: Session = DB):
-    i = db.get(Instrument, inst_id) or fail(ValidationError("not found"), 404)
-    if db.scalar(select(Transaction.id).where(Transaction.instrument_id == inst_id).limit(1)):
-        fail(ValidationError("Instrument has transactions and cannot be deleted"), 409)
-    audit(db, "instrument", i.id, "delete", before=i)
-    db.delete(i)
-    db.commit()
-    return {"ok": True}
+@router.get("/holdings")
+def list_holdings(db: Session = DB):
+    return [{**row_dict(h), "broker": h.broker.name, "symbol": h.instrument.symbol} for h in db.scalars(select(Holding))]
 
 
-# ---------------------------------------------------------------- transactions
-def _txn_query(account_id=None, instrument_id=None, type=None, q=None, start=None, end=None):
-    stmt = select(Transaction)
-    if account_id:
-        stmt = stmt.where(or_(Transaction.account_id == account_id, Transaction.to_account_id == account_id))
-    if instrument_id:
-        stmt = stmt.where(Transaction.instrument_id == instrument_id)
-    if type:
-        stmt = stmt.where(Transaction.type.in_(type.upper().split(",")))
-    if start:
-        stmt = stmt.where(Transaction.trade_date >= start)
-    if end:
-        stmt = stmt.where(Transaction.trade_date <= end)
-    if q:
-        like = f"%{q}%"
-        stmt = stmt.outerjoin(Instrument, Transaction.instrument_id == Instrument.id).where(
-            or_(Instrument.symbol.ilike(like), Instrument.name.ilike(like), Transaction.note.ilike(like)))
-    return stmt
+@router.post("/holdings", status_code=201)
+def create_holding(body: dict, db: Session = DB):
+    return write(db, lambda: row_dict(save_holding(db, body)))
 
 
-@router.get("/transactions")
-def list_transactions(account_id: int | None = None, instrument_id: int | None = None, type: str | None = None,
-                      q: str | None = None, start: date | None = None, end: date | None = None,
-                      limit: int = Query(200, le=2000), offset: int = 0, db: Session = DB):
-    stmt = _txn_query(account_id, instrument_id, type, q, start, end)
-    total = len(list(db.scalars(stmt.with_only_columns(Transaction.id))))
-    rows = db.scalars(stmt.order_by(Transaction.trade_date.desc(), Transaction.id.desc()).limit(limit).offset(offset))
-    return {"total": total, "items": [txn_out(t) for t in rows]}
+@router.put("/holdings/{hid}")
+def update_holding(hid: int, body: dict, db: Session = DB):
+    h = found(db.get(Holding, hid))
+    return write(db, lambda: row_dict(save_holding(db, body, h)))
 
 
-@router.get("/transactions/export.csv")
-def export_csv(account_id: int | None = None, instrument_id: int | None = None, type: str | None = None,
-               q: str | None = None, start: date | None = None, end: date | None = None, db: Session = DB):
-    stmt = _txn_query(account_id, instrument_id, type, q, start, end).order_by(Transaction.trade_date, Transaction.id)
-    body = csv_io.export(db, list(db.scalars(stmt)))
-    return Response(body, media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="transactions-{date.today()}.csv"'})
+@router.delete("/holdings/{hid}")
+def remove_holding(hid: int, db: Session = DB):
+    h = found(db.get(Holding, hid))
+
+    def go():
+        delete_holding(db, h)
+        return {"ok": True}
+    return write(db, go)
 
 
-@router.get("/transactions/{txn_id}")
-def get_transaction(txn_id: int, db: Session = DB):
-    t = db.get(Transaction, txn_id) or fail(ValidationError("not found"), 404)
-    hist = db.scalars(select(AuditLog).where(AuditLog.entity == "transaction", AuditLog.entity_id == txn_id)
-                      .order_by(AuditLog.ts))
-    return {**txn_out(t), "history": [row_dict(h) for h in hist]}
-
-
-@router.post("/transactions", status_code=201)
-def post_transaction(body: dict, allow_duplicate: bool = False, db: Session = DB):
-    try:
-        t = create_txn(db, body, allow_duplicate=allow_duplicate)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return txn_out(t)
-
-
-@router.put("/transactions/{txn_id}")
-def put_transaction(txn_id: int, body: dict, allow_duplicate: bool = False, db: Session = DB):
-    t = db.get(Transaction, txn_id) or fail(ValidationError("not found"), 404)
-    try:
-        update_txn(db, t, body, allow_duplicate=allow_duplicate)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return txn_out(t)
-
-
-@router.delete("/transactions/{txn_id}")
-def remove_transaction(txn_id: int, db: Session = DB):
-    t = db.get(Transaction, txn_id) or fail(ValidationError("not found"), 404)
-    try:
-        delete_txn(db, t)
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(ValidationError(f"Cannot delete: later history depends on it. {exc}"), 409)
-    return {"ok": True}
+@router.get("/holdings/export.csv")
+def holdings_csv(db: Session = DB):
+    return Response(export_csv(db), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="holdings-{date.today()}.csv"'})
 
 
 @router.post("/import/{mode}")
-async def import_csv(mode: str, file: UploadFile = File(...), mapping: str | None = Form(None),
-                     date_format: str = Form("iso"), create_missing: bool = Form(False),
-                     skip_duplicates: bool = Form(True), db: Session = DB):
+async def import_holdings(mode: str, file: UploadFile = File(...), broker_id: int | None = Form(None),
+                          mapping: str | None = Form(None), replace: bool = Form(True), db: Session = DB):
     if mode not in ("preview", "commit"):
         raise HTTPException(404)
     content = await file.read()
     if len(content) > 5_000_000:
-        fail(ValidationError("CSV larger than 5 MB"))
+        fail(ValidationError("File is larger than 5 MB"))
     try:
-        result = csv_io.process(db, content, json.loads(mapping) if mapping else None, date_format,
-                                create_missing, skip_duplicates, commit=(mode == "commit"))
+        result = process_import(db, content, file.filename or "upload.csv", broker_id,
+                                json.loads(mapping) if mapping else None, "replace" if replace else "merge",
+                                commit=(mode == "commit"))
         if mode == "commit":
             db.commit()
         else:
-            db.rollback()
+            db.rollback()  # preview never writes
     except (ValidationError, json.JSONDecodeError) as exc:
         db.rollback()
         fail(exc)
@@ -363,36 +319,40 @@ async def import_csv(mode: str, file: UploadFile = File(...), mapping: str | Non
 
 
 # ---------------------------------------------------------------- prices & fx
-@router.get("/prices/{inst_id}")
-def price_history(inst_id: int, db: Session = DB):
-    rows = db.scalars(select(PriceHistory).where(PriceHistory.instrument_id == inst_id)
-                      .order_by(PriceHistory.price_date.desc(), PriceHistory.fetched_at.desc()).limit(100))
+@router.get("/prices/{iid}")
+def price_history(iid: int, db: Session = DB):
+    rows = db.scalars(select(PriceHistory).where(PriceHistory.instrument_id == iid)
+                      .order_by(PriceHistory.price_date.desc(), PriceHistory.fetched_at.desc()).limit(60))
     return [row_dict(r) for r in rows]
 
 
 @router.post("/prices", status_code=201)
 def manual_price(body: dict, db: Session = DB):
-    inst = db.get(Instrument, body.get("instrument_id")) or fail(ValidationError("unknown instrument", "instrument_id"))
-    try:
+    inst = found(db.get(Instrument, body.get("instrument_id")), "unknown stock")
+
+    def go():
         on = date.fromisoformat(body.get("date") or date.today().isoformat())
-        row = market.save_manual_price(db, inst, dec(body.get("price"), "price", required=True), on,
-                                       body.get("currency"))
+        if on > date.today():
+            raise ValidationError("date cannot be in the future", "date")
+        price = to_decimal(body.get("price"), "price", positive=True)
+        if price is None:
+            raise ValidationError("price is required", "price")
+        row = market.save_manual_price(db, inst, price, on)
         db.flush()
         audit(db, "price", row.id, "manual", after=row)
-        db.commit()
-    except ValueError as exc:
-        db.rollback()
-        fail(exc)
-    return row_dict(row)
+        return row_dict(row)
+    return write(db, go)
 
 
-@router.delete("/prices/{price_id}")
-def delete_price(price_id: int, db: Session = DB):
-    p = db.get(PriceHistory, price_id) or fail(ValidationError("not found"), 404)
-    audit(db, "price", p.id, "delete", before=p)
-    db.delete(p)
-    db.commit()
-    return {"ok": True}
+@router.delete("/prices/{pid}")
+def delete_price(pid: int, db: Session = DB):
+    p = found(db.get(PriceHistory, pid))
+
+    def go():
+        audit(db, "price", p.id, "delete", before=p)
+        db.delete(p)
+        return {"ok": True}
+    return write(db, go)
 
 
 @router.get("/fx")
@@ -403,11 +363,13 @@ def fx_rates(db: Session = DB):
 
 @router.post("/fx", status_code=201)
 def manual_fx(body: dict, db: Session = DB):
-    try:
+    def go():
         base, quote = (body.get("base") or "").upper(), (body.get("quote") or "").upper()
         if base not in CURRENCIES or quote not in CURRENCIES or base == quote:
             raise ValidationError("choose two different supported currencies", "base")
-        rate = dec(body.get("rate"), "rate", required=True, positive=True)
+        rate = to_decimal(body.get("rate"), "rate", positive=True)
+        if rate is None:
+            raise ValidationError("rate is required", "rate")
         on = date.fromisoformat(body.get("date") or date.today().isoformat())
         row = db.scalar(select(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.rate_date == on,
                                              FxRate.source == "manual"))
@@ -418,25 +380,13 @@ def manual_fx(body: dict, db: Session = DB):
             row.rate, row.fetched_at = rate, utcnow()
         db.flush()
         audit(db, "fx", row.id, "manual", after=row)
-        db.commit()
-    except (ValueError, IntegrityError) as exc:
-        db.rollback()
-        fail(exc)
-    return row_dict(row)
-
-
-@router.get("/fx/convert")
-def fx_convert(amount: str, base: str, quote: str, on: date | None = None, db: Session = DB):
-    q = FxTable.load(db).quote(base.upper(), quote.upper(), on)
-    if q is None:
-        return {"rate": None, "result": None}
-    return {"rate": q.rate, "result": Decimal(amount) * q.rate, "rate_date": q.rate_date, "source": q.source}
+        return row_dict(row)
+    return write(db, go)
 
 
 @router.post("/refresh", status_code=202)
 def refresh():
-    started = market.start_refresh()
-    return {"started": started, **market.STATE.snapshot()}
+    return {"started": market.start_refresh(), **market.STATE.snapshot()}
 
 
 @router.get("/refresh")
@@ -444,74 +394,91 @@ def refresh_status():
     return market.STATE.snapshot()
 
 
-# ---------------------------------------------------------------- dividends
-@router.get("/dividends/events")
-def div_events(status: str | None = None, instrument_id: int | None = None, account_id: int | None = None,
-               db: Session = DB):
-    return dividends.list_events(db, status, instrument_id, account_id)
-
-
-@router.post("/dividends/events", status_code=201)
-def create_div_event(body: dict, db: Session = DB):
-    try:
-        ev = dividends.save_event(db, body)
-        db.commit()
-    except (ValidationError, ValueError) as exc:
-        db.rollback()
-        fail(exc)
-    return dividends.event_detail(db, ev)
-
-
-@router.put("/dividends/events/{ev_id}")
-def update_div_event(ev_id: int, body: dict, db: Session = DB):
-    ev = db.get(DividendEvent, ev_id) or fail(ValidationError("not found"), 404)
-    try:
-        dividends.save_event(db, body, ev)
-        db.commit()
-    except (ValidationError, ValueError) as exc:
-        db.rollback()
-        fail(exc)
-    return dividends.event_detail(db, ev)
-
-
-@router.delete("/dividends/events/{ev_id}")
-def delete_div_event(ev_id: int, db: Session = DB):
-    ev = db.get(DividendEvent, ev_id) or fail(ValidationError("not found"), 404)
-    if db.scalar(select(Transaction.id).where(Transaction.dividend_event_id == ev_id).limit(1)):
-        fail(ValidationError("Event has reconciled dividend transactions. Delete those first."), 409)
-    audit(db, "dividend_event", ev.id, "delete", before=ev)
-    db.delete(ev)
-    db.commit()
-    return {"ok": True}
-
-
-@router.post("/dividends/events/{ev_id}/reconcile")
-def reconcile_event(ev_id: int, body: dict, db: Session = DB):
-    ev = db.get(DividendEvent, ev_id) or fail(ValidationError("not found"), 404)
-    try:
-        txns = dividends.reconcile(db, ev, body.get("entries") or [])
-        db.commit()
-    except ValidationError as exc:
-        db.rollback()
-        fail(exc)
-    return {"transactions": [txn_out(t) for t in txns], "event": dividends.event_detail(db, ev)}
-
-
+# ---------------------------------------------------------------- dividends & calendar
 @router.get("/dividends/summary")
 def div_summary(base: str | None = None, db: Session = DB):
     return dividends.summary(db, base)
 
 
-# ---------------------------------------------------------------- audit & backups
+@router.get("/dividends/events")
+def div_events(instrument_id: int | None = None, db: Session = DB):
+    return dividends.list_events(db, instrument_id)
+
+
+@router.post("/dividends/events", status_code=201)
+def create_div_event(body: dict, db: Session = DB):
+    return write(db, lambda: row_dict(dividends.save_event(db, body)))
+
+
+@router.put("/dividends/events/{eid}")
+def update_div_event(eid: int, body: dict, db: Session = DB):
+    ev = found(db.get(DividendEvent, eid))
+    return write(db, lambda: row_dict(dividends.save_event(db, body, ev)))
+
+
+@router.delete("/dividends/events/{eid}")
+def delete_div_event(eid: int, db: Session = DB):
+    ev = found(db.get(DividendEvent, eid))
+
+    def go():
+        audit(db, "dividend_event", ev.id, "delete", before=ev)
+        db.delete(ev)  # received payments are kept; only their link is cleared
+        return {"ok": True}
+    return write(db, go)
+
+
+@router.post("/dividends/events/{eid}/received", status_code=201)
+def confirm_received(eid: int, body: dict, db: Session = DB):
+    ev = found(db.get(DividendEvent, eid))
+    return write(db, lambda: dividends.payment_out(dividends.record_payment(db, body, ev)))
+
+
+@router.post("/dividends/payments", status_code=201)
+def add_payment(body: dict, db: Session = DB):
+    return write(db, lambda: dividends.payment_out(dividends.record_payment(db, body)))
+
+
+@router.delete("/dividends/payments/{pid}")
+def remove_payment(pid: int, db: Session = DB):
+    p = found(db.get(DividendPayment, pid))
+
+    def go():
+        dividends.delete_payment(db, p)
+        return {"ok": True}
+    return write(db, go)
+
+
+@router.get("/calendar")
+def get_calendar(days: int = Query(120, le=365), db: Session = DB):
+    return dividends.calendar(db, days)
+
+
+@router.post("/earnings", status_code=201)
+def add_earnings(body: dict, db: Session = DB):
+    return write(db, lambda: row_dict(dividends.save_earnings(db, body)))
+
+
+@router.delete("/earnings/{eid}")
+def remove_earnings(eid: int, db: Session = DB):
+    er = found(db.get(EarningsDate, eid))
+
+    def go():
+        db.delete(er)
+        return {"ok": True}
+    return write(db, go)
+
+
+# ---------------------------------------------------------------- audit, snapshots, backups
+@router.get("/snapshots")
+def snapshots(db: Session = DB):
+    rows = db.scalars(select(ValuationSnapshot).order_by(ValuationSnapshot.snapshot_date))
+    return [{"date": r.snapshot_date, "base_currency": r.base_currency, "value": r.total_value, "pl": r.total_pl}
+            for r in rows]
+
+
 @router.get("/audit")
-def audit_log(entity: str | None = None, entity_id: int | None = None, limit: int = Query(100, le=1000),
-              db: Session = DB):
-    q = select(AuditLog).order_by(AuditLog.id.desc()).limit(limit)
-    if entity:
-        q = q.where(AuditLog.entity == entity)
-    if entity_id:
-        q = q.where(AuditLog.entity_id == entity_id)
-    return [row_dict(a) for a in db.scalars(q)]
+def audit_log(limit: int = Query(100, le=1000), db: Session = DB):
+    return [row_dict(a) for a in db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(limit))]
 
 
 @router.get("/backups")
@@ -556,12 +523,3 @@ async def restore_upload(file: UploadFile = File(...)):
         fail(exc, 400)
     finally:
         path.unlink(missing_ok=True)
-
-
-@router.post("/ledger/validate")
-def ledger_validate(db: Session = DB):
-    try:
-        validate_ledger(db)
-    except ValidationError as exc:
-        return {"ok": False, "message": str(exc)}
-    return {"ok": True}

@@ -13,7 +13,7 @@ def write_snapshot(db, on: date | None = None):
     pf = build_portfolio(db)
     t = pf["totals"]
     detail = json.dumps([{"id": a["id"], "name": a["name"], "value": str(a["value"]), "pl": str(a["pl"])}
-                         for a in pf["accounts"]])
+                         for a in pf["categories"]])
     row = db.scalar(select(ValuationSnapshot).where(
         ValuationSnapshot.snapshot_date == on, ValuationSnapshot.base_currency == pf["base_currency"]))
     if row is None:

@@ -2,12 +2,24 @@ export type Num = string | null;
 export type Currency = "MYR" | "USD" | "SGD" | "GBP" | "HKD";
 export type PriceStatus = "Live" | "Delayed" | "Cached" | "Manual" | "Unavailable" | "Partial";
 
+export interface Lot {
+  holding_id: number;
+  broker_id: number;
+  broker: string;
+  quantity: string;
+  avg_cost: string;
+  updated_at: string;
+  source: string;
+}
+
 export interface Holding {
   instrument_id: number;
   symbol: string;
   name: string | null;
   kind: string;
   currency: string;
+  category_id: number | null;
+  sort_order: number;
   quantity: string;
   avg_cost: Num;
   cost: string;
@@ -17,60 +29,36 @@ export interface Holding {
   price_date: string | null;
   price_fetched_at: string | null;
   market_value: Num;
-  unrealized: Num;
-  realized: string;
-  capital_gain: Num;
-  dividends_gross: string;
-  dividend_tax: string;
+  gain: Num;
   dividends_net: string;
-  fees: string;
   total_pl: Num;
   pl_pct: Num;
   dps: Num;
   dps_source: string | null;
   withholding_tax_rate: string;
-  est_annual_dividend: Num;
   est_annual_dividend_net: Num;
   dividend_yield: Num;
-  yield_on_cost: Num;
   fx_rate: Num;
   market_value_base: Num;
   cost_base: Num;
   total_pl_base: Num;
-  fx_effect_base: Num;
-  first_date: string | null;
+  est_annual_dividend_base: Num;
+  lots: Lot[];
 }
 
-export interface AccountView {
-  id: number;
+export interface CategoryCard {
+  id: number | null;
   name: string;
-  layout: "dividend" | "growth";
-  currency: Currency;
-  broker: string | null;
-  track_cash: boolean;
-  archived: boolean;
-  notes: string | null;
+  show_dividends: boolean;
   sort_order: number;
+  holdings: Holding[];
   value: string;
-  market_value: string;
   cost: string;
   pl: string;
   pl_pct: Num;
-  unrealized: string;
-  realized: string;
-  dividends_net: string;
-  fees: string;
-  fx_effect: string;
   est_annual_dividend: string;
-  est_annual_dividend_gross: string;
   dividend_yield: Num;
-  cash: Record<string, string>;
-  cash_base: string;
-  net_contributions: Num;
-  value_minus_contributions: Num;
   incomplete: boolean;
-  holdings: Holding[];
-  closed: Holding[];
 }
 
 export interface RefreshState {
@@ -88,40 +76,25 @@ export interface Portfolio {
   prices_as_of: string | null;
   demo: boolean;
   price_status: PriceStatus;
-  price_status_counts: Record<string, number>;
   fx: { from: string; to: string; rate: Num; date: string | null; source: string | null }[];
-  totals: {
-    value: string;
-    market_value: string;
-    cash: string;
-    cost: string;
-    pl: string;
-    pl_pct: Num;
-    unrealized: string;
-    realized: string;
-    dividends_net: string;
-    fees: string;
-    fx_effect: Num;
-    est_annual_dividend: string;
-    est_annual_dividend_gross: string;
-    dividend_yield: Num;
-    incomplete: boolean;
-  };
-  accounts: AccountView[];
+  totals: { value: string; cost: string; pl: string; pl_pct: Num; est_annual_dividend: string; dividend_yield: Num; incomplete: boolean };
+  categories: CategoryCard[];
   warnings: string[];
   refresh: RefreshState;
 }
 
-export interface Account {
+export interface Broker {
   id: number;
   name: string;
-  layout: "dividend" | "growth";
-  currency: Currency;
-  broker: string | null;
-  track_cash: boolean;
-  sort_order: number;
-  archived: boolean;
   notes: string | null;
+  holdings?: number;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  show_dividends: boolean;
+  sort_order: number;
 }
 
 export interface Instrument {
@@ -135,37 +108,8 @@ export interface Instrument {
   annual_dividend_per_share: Num;
   dividend_frequency: number | null;
   withholding_tax_rate: string;
+  category_id: number | null;
   notes: string | null;
-}
-
-export type TxnType = "BUY" | "SELL" | "DIVIDEND" | "DRIP" | "DEPOSIT" | "WITHDRAWAL" | "FEE" | "TAX" | "SPLIT" | "TRANSFER";
-
-export interface Txn {
-  id: number;
-  type: TxnType;
-  trade_date: string;
-  account_id: number | null;
-  to_account_id: number | null;
-  instrument_id: number | null;
-  quantity: Num;
-  price: Num;
-  amount: Num;
-  fees: string;
-  tax: string;
-  currency: string;
-  fx_rate: Num;
-  fx_currency: string | null;
-  split_ratio: Num;
-  dividend_event_id: number | null;
-  note: string | null;
-  source: string;
-  import_batch: string | null;
-  created_at: string;
-  updated_at: string;
-  account_name: string | null;
-  to_account_name: string | null;
-  symbol: string | null;
-  cash_effect: Num;
 }
 
 export interface AuditEntry {
@@ -183,6 +127,7 @@ export interface DividendEvent {
   id: number;
   instrument_id: number;
   symbol: string;
+  name: string | null;
   ex_date: string;
   pay_date: string | null;
   amount_per_share: string;
@@ -190,56 +135,61 @@ export interface DividendEvent {
   status: "forecast" | "announced" | "pending" | "received";
   withholding_tax_rate: Num;
   withholding_rate_effective: string;
+  source: string | null;
   note: string | null;
-  eligible_shares: string;
+  quantity: string;
   expected_gross: string;
+  expected_tax: string;
   expected_net: string;
+  expected_net_base?: Num;
   received_net: Num;
-  suggested_status: string;
-  reconciled: boolean;
-  accounts: {
-    account_id: number;
-    account_name: string;
-    eligible_shares: string;
-    expected_gross: string;
-    expected_tax: string;
-    expected_net: string;
-    received_net: Num;
-    transaction_ids: number[];
-    difference: Num;
-  }[];
+  awaiting_confirmation: boolean;
+}
+
+export interface Payment {
+  id: number;
+  instrument_id: number;
+  symbol: string;
+  broker: string | null;
+  broker_id: number | null;
+  event_id: number | null;
+  pay_date: string;
+  gross: string;
+  tax: string;
+  net: string;
+  currency: string;
+  note: string | null;
 }
 
 export interface DividendSummary {
   base_currency: Currency;
   forward_annual_estimate: string;
-  forward_annual_estimate_gross: string;
   monthly_average_projected: string;
-  t12m_net: string;
-  t12m_gross: string;
-  t12m_tax: string;
   portfolio_yield: Num;
-  yield_on_cost: Num;
-  chart: { month: string; received: string; forecast: string; run_rate: string; period: "past" | "future" }[];
-  holdings: {
-    account: string;
-    symbol: string;
-    currency: string;
-    est_annual_net_base: Num;
-    est_annual_gross: Num;
-    dps: Num;
-    dps_source: string | null;
-    dividend_yield: Num;
-    yield_on_cost: Num;
-    withholding_tax_rate: string;
-    t12m_net_base: string;
-    share_pct: Num;
-  }[];
-  by_account: { account: string; t12m_net: string; forward_net: string }[];
-  by_currency: { currency: string; t12m_net: string; forward_net: string }[];
-  by_year: { year: string; net: string }[];
-  upcoming: (DividendEvent & { expected_net_base: string; date_for_calendar: string })[];
-  notes: { estimates: string; fx_fallback: boolean; unconverted_transactions: number[] };
+  t12m_net: string;
+  chart: { month: string; received: string; expected: string }[];
+  holdings: { symbol: string; category: string; currency: string; est_annual_net_base: string; dividend_yield: Num; dps_source: string | null }[];
+  to_confirm: DividendEvent[];
+  upcoming: DividendEvent[];
+  recent_payments: Payment[];
+}
+
+export interface CalendarItem {
+  kind: "ex_date" | "pay_date" | "earnings";
+  date: string;
+  symbol: string;
+  instrument_id: number;
+  event_id?: number;
+  earnings_id?: number;
+  currency?: string;
+  amount_per_share?: string;
+  expected_net?: string;
+  status?: string;
+  pay_date?: string | null;
+  ex_date?: string;
+  session?: "before" | "after" | null;
+  title?: string | null;
+  source?: string;
 }
 
 export interface Settings {
@@ -255,8 +205,6 @@ export interface Settings {
 
 export interface Meta {
   currencies: Currency[];
-  transaction_types: TxnType[];
-  dividend_statuses: string[];
   demo: boolean;
   db_path: string;
   lan_urls: string[];

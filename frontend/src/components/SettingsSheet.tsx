@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Download, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
 import { api } from "../lib/api";
 import { dateTime, num, today } from "../lib/format";
-import { useAccounts, useInstruments, useInvalidateAll, useMeta, useOpenSheet, useSaveSettings, useSettings } from "../lib/hooks";
+import { useBrokers, useCategories, useInvalidateAll, useMeta, useOpenSheet, useSaveSettings, useSettings } from "../lib/hooks";
 import type { AuditEntry, RefreshState, Settings } from "../lib/types";
 import { Button, ConfirmSheet, Field, Input, Select, Sheet, Spinner, Toggle, useToast } from "./ui";
 import { Section } from "./forms";
@@ -24,8 +24,8 @@ function SettingsBody({ s }: { s: Settings }) {
   const toast = useToast();
   const meta = useMeta();
   const openSheet = useOpenSheet();
-  const accounts = useAccounts();
-  const instruments = useInstruments();
+  const brokers = useBrokers();
+  const categories = useCategories();
   const refresh = useQuery({ queryKey: ["refresh"], queryFn: () => api<RefreshState>("/refresh") });
   const [interval, setInterval] = useState(String(s.refresh_interval_minutes));
   const [stale, setStale] = useState(String(s.stale_after_minutes));
@@ -85,54 +85,50 @@ function SettingsBody({ s }: { s: Settings }) {
 
 
       <Section
-        title="Accounts"
+        title="Brokers"
         action={
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => openSheet({ kind: "account" })}>
+          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => openSheet({ kind: "broker" })}>
             <Plus className="h-3.5 w-3.5" /> Add
           </Button>
         }
       >
         <ul className="divide-y divide-white/5 rounded-xl bg-ink-900">
-          {(accounts.data ?? []).map((a) => (
-            <li key={a.id} className="flex items-center justify-between px-3 py-2 text-sm">
+          {(brokers.data ?? []).map((b) => (
+            <li key={b.id} className="flex items-center justify-between px-3 py-2 text-sm">
               <span>
-                {a.name} <span className="text-2xs text-faint">· {a.layout}{a.archived ? " · archived" : ""}</span>
+                {b.name} <span className="text-2xs text-faint">· {b.holdings ?? 0} holdings</span>
               </span>
-              <button className="text-faint hover:text-white" aria-label={`Edit ${a.name}`} onClick={() => openSheet({ kind: "account", account: a })}>
+              <button className="text-faint hover:text-white" aria-label={`Edit ${b.name}`} onClick={() => openSheet({ kind: "broker", broker: b })}>
                 <Pencil className="h-4 w-4" />
               </button>
             </li>
           ))}
-          {accounts.data?.length === 0 && <li className="px-3 py-2 text-xs text-faint">No accounts</li>}
+          {brokers.data?.length === 0 && <li className="px-3 py-2 text-xs text-faint">No brokers yet</li>}
         </ul>
       </Section>
 
       <Section
-        title="Instruments"
+        title="Categories"
         action={
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => openSheet({ kind: "instrument" })}>
+          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => openSheet({ kind: "category" })}>
             <Plus className="h-3.5 w-3.5" /> Add
           </Button>
         }
       >
         <ul className="divide-y divide-white/5 rounded-xl bg-ink-900">
-          {(instruments.data ?? []).map((i) => (
-            <li key={i.id} className="flex items-center justify-between px-3 py-2 text-sm">
+          {(categories.data ?? []).map((c) => (
+            <li key={c.id} className="flex items-center justify-between px-3 py-2 text-sm">
               <span>
-                {i.symbol} <span className="text-2xs text-faint">· {i.currency} · {i.kind} · {i.price_mode === "manual" ? "manual price" : "provider"}</span>
+                {c.name} {c.show_dividends && <span className="text-2xs text-faint">· dividend columns</span>}
               </span>
-              <span className="flex gap-3">
-                <button className="text-2xs text-blue-300 hover:underline" onClick={() => openSheet({ kind: "price", instrumentId: i.id })}>
-                  Price
-                </button>
-                <button className="text-faint hover:text-white" aria-label={`Edit ${i.symbol}`} onClick={() => openSheet({ kind: "instrument", instrument: i })}>
-                  <Pencil className="h-4 w-4" />
-                </button>
-              </span>
+              <button className="text-faint hover:text-white" aria-label={`Edit ${c.name}`} onClick={() => openSheet({ kind: "category", category: c })}>
+                <Pencil className="h-4 w-4" />
+              </button>
             </li>
           ))}
-          {instruments.data?.length === 0 && <li className="px-3 py-2 text-xs text-faint">No instruments</li>}
+          {categories.data?.length === 0 && <li className="px-3 py-2 text-xs text-faint">No categories yet</li>}
         </ul>
+        <p className="text-2xs text-faint">To move a stock, use Arrange on the Portfolio tab, or open the stock and pick a category.</p>
       </Section>
 
       <DataSection />
@@ -276,11 +272,11 @@ function DataSection() {
   return (
     <Section title="Data">
       <div className="flex flex-wrap gap-2">
-        <a href="/api/transactions/export.csv" className="inline-flex items-center gap-1.5 rounded-xl bg-ink-700 px-3.5 py-2 text-sm font-semibold text-slate-100 hover:bg-ink-600">
-          <Download className="h-4 w-4" /> Export CSV
+        <a href="/api/holdings/export.csv" className="inline-flex items-center gap-1.5 rounded-xl bg-ink-700 px-3.5 py-2 text-sm font-semibold text-slate-100 hover:bg-ink-600">
+          <Download className="h-4 w-4" /> Export holdings
         </a>
         <Button variant="secondary" onClick={() => openSheet({ kind: "import" })}>
-          <Upload className="h-4 w-4" /> Import CSV
+          <Upload className="h-4 w-4" /> Upload holdings
         </Button>
         <Button variant="secondary" onClick={create} loading={busy}>
           Backup now

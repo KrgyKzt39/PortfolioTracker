@@ -1,12 +1,11 @@
-import { ArrowUpDown, BarChart3, Clock, DollarSign } from "lucide-react";
+import { BarChart3, CalendarDays, DollarSign } from "lucide-react";
 import { cn } from "../lib/format";
 
-export type Tab = "dashboard" | "dv" | "transactions" | "dividends";
+export type Tab = "portfolio" | "dividends" | "calendar";
 export const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
-  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "dv", label: "DV Summary", icon: DollarSign },
-  { id: "transactions", label: "Transactions", icon: ArrowUpDown },
-  { id: "dividends", label: "Dividends", icon: Clock },
+  { id: "portfolio", label: "Portfolio", icon: BarChart3 },
+  { id: "dividends", label: "Dividends", icon: DollarSign },
+  { id: "calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {

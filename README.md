@@ -1,11 +1,13 @@
 # Portfolio Tracker
 
-A local-first, mobile-first investment portfolio tracker. It runs on your Windows PC, stores everything in a local SQLite file, and you open it from Safari on your iPhone over your home Wi-Fi. No cloud, no subscription, no account.
+A simple, local-first place to see all your holdings across brokers in one view. It runs on your Windows PC, keeps everything in a local SQLite file, and you open it from Safari on your iPhone over home Wi-Fi. No cloud, no subscription, no account.
 
-- **Dashboard**: total value in your base currency (MYR, USD, SGD, GBP, HKD), P/L and return %, FX rates, account cards (dividend or growth layout), expandable holding details, privacy toggle, refresh.
-- **DV Summary**: forward dividend estimate, trailing-12-month income, monthly received vs expected chart, contribution by holding/account/currency, yield and yield on cost, year-by-year history.
-- **Transactions**: buy, sell, dividend, dividend reinvestment, deposit, withdrawal, fee, tax, stock split, transfer between accounts. Search and filters, edit/delete with history checks, duplicate detection, CSV import (column mapping and preview) and export.
-- **Dividends**: ex-date / pay-date event ledger, forecast, announced, pending and received statuses, eligible shares, withholding tax, reconciliation of what actually arrived.
+Your brokers stay the record of your trades. This app holds a snapshot of each holding (quantity and average cost, as your broker app shows them), adds live prices, and tracks dividends.
+
+- **Portfolio**: total value in your base currency (MYR, USD, SGD, GBP, HKD), P/L and return %, one card per category you define (e.g. "Blue chips", "Dividend", "Growth"). The same stock at several brokers shows as one row, with the per-broker split in its details. Arrange stocks by dragging, or pick a category in a stock's settings.
+- **Dividends**: expected per year and per month, received in the last 12 months, a month-by-month chart, each holding's expected dividend and yield, and a short "did these arrive?" list to confirm payments.
+- **Calendar**: upcoming ex-dates, payment dates and earnings dates for stocks you hold.
+- **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first.
 
 ## Run it on Windows
 
@@ -53,6 +55,7 @@ Price sources are tried in order; the first one that covers a symbol and returns
 | 2 | **Alpaca** (documented REST API) | US stocks and ETFs | Free Alpaca account (paper is fine), key ID + secret in `.env` |
 | 3 | Alpha Vantage | US | Optional free key, ~25 requests/day |
 | 4 | Yahoo Finance (unofficial, **off by default**) | Everything incl. Bursa (.KL) | Toggle in Settings |
+| – | Longbridge dividend & earnings dates | US, HK, SG holdings | Automatic when Longbridge keys are set (every 12 h on refresh) |
 | – | Manual | Anything, incl. ASNB | Always available |
 | FX | Frankfurter (ECB reference rates) | MYR, USD, SGD, GBP, HKD | On by default, no key |
 
@@ -64,30 +67,22 @@ Symbols are mapped automatically: `MSFT` → `MSFT.US`, `0005.HK` → `5.HK`, `D
 
 ## How the numbers are calculated
 
-Transactions are the single source of truth. Everything else (holdings, cost, P/L, cash, dividends) is recomputed from them with Python `Decimal`. Rounding happens only for display.
+All maths uses Python `Decimal`; rounding happens only for display.
 
-- **Cost basis**: weighted-average cost, including buy fees.
-- **Realised P/L**: sale proceeds minus sale fees minus average cost of the shares sold.
-- **Capital gain** = unrealised + realised. **Total P/L** = capital gain + net dividends − fees/taxes.
-- **Return %** = total P/L ÷ current cost basis (N/A if there is no cost basis or no price).
-- **Dividends**: recorded gross with withholding tax, so net = gross − tax. Reinvested dividends (DRIP) count as income once and add shares at the reinvested cost.
-- **Splits** change share count, not total cost. **Transfers** move shares with their cost basis and realise nothing.
-- **Deposits/withdrawals** are contributions, never returns. Turn on *Track cash* for an account to include its cash balance in value; the account detail then shows value minus net contributions, which reconciles with P/L.
-- **Multi-currency**: each holding is valued in its own currency and translated at the latest FX rate. If historical FX rates exist (stored rates, or the FX rate entered on a trade) the app also shows the **FX effect** on cost separately from price movement.
-- **Dividend estimates** use your forward dividend per share if set, otherwise trailing-12-month dividends. Estimates are labelled and never turned into income: an expected dividend becomes income only when you reconcile it.
-- **Eligibility**: shares held at the close of the day before the ex-date.
+- **Gain** = (price − average cost) × quantity. Average cost is your broker's figure.
+- **P/L** = gain + dividends you confirmed as received (after tax). **Return %** = P/L ÷ cost.
+- A stock held at two brokers combines quantities with a weighted average cost.
+- Base-currency figures use the latest FX rate. A stock with no price (or no FX rate) shows **N/A** and is left out of totals, with a warning.
+- **Expected dividends** use your own yearly dividend per share if you set one, otherwise the last 12 months of dividend dates, times the quantity you hold today, after withholding tax (30% by default for US stocks, editable per stock). They are estimates and never count as income until you confirm a payment.
+- Realised gains from past sales are not tracked: those live in your broker's records.
 
-Edits and deletes replay the entire history. If a change would make any point in time invalid (for example deleting a buy that a later sale depends on), it is rejected and nothing changes. Every change is written to the audit log (Settings → Audit history), including the full deleted record.
+## Uploading holdings
 
-## CSV format
+Most broker exports work as-is. The app finds the header row (even under title rows in Excel) and guesses the columns: symbol/code/ticker, quantity/qty/shares/units, average cost/avg price/cost price, plus optional name, currency, category and broker. You can change the mapping in the preview. Values like `"2,800"` or `RM10.18` are fine.
 
-```
-date,type,account,to_account,symbol,quantity,price,amount,fees,tax,currency,fx_rate,fx_currency,split_ratio,note
-2026-01-15,BUY,Dividend Acc,,1155.KL,1000,10.18,,15,,MYR,,,,
-2026-03-01,DIVIDEND,Dividend Acc,,1155.KL,,,300,0,,MYR,,,,
-```
+Choose the broker, then either "This file is my full list for this broker" (stocks missing from the file are removed from that broker) or turn it off to only add or update. Nothing is saved until you press Import. Settings → Data → Export holdings gives a CSV in the same format.
 
-Exports use exactly this format, so they re-import cleanly (as duplicates, which are skipped by default). Import lets you map differently named columns, choose the date format (YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY), optionally create missing accounts/instruments, and previews every row before writing anything.
+Symbols: Bursa `1155.KL`, US `MSFT`, SGX `D05.SI`, HK `0005.HK`, LSE `VOD.L`. Funds without a ticker (e.g. ASNB) can use any short name with a manual price.
 
 ## Backup and restore
 
@@ -110,14 +105,14 @@ cd frontend && npm run build && npx playwright test
 Project layout:
 
 ```
-backend/app/ledger.py       accounting engine (pure functions)
-backend/app/valuation.py    holdings + prices + FX -> dashboard numbers
-backend/app/dividends.py    events, eligibility, reconciliation, summaries
-backend/app/market/         provider adapters and background refresh
-backend/app/csv_io.py       CSV import/export
+backend/app/holdings.py     holdings, Excel/CSV import and export
+backend/app/valuation.py    holdings + prices + FX -> category cards and totals
+backend/app/dividends.py    dividend dates, confirmed payments, summary, calendar
+backend/app/market/         price sources, Longbridge dates, background refresh
+backend/app/ledger.py       only used to convert databases from the first version
 backend/app/backup.py       backup/restore with integrity checks
 backend/app/api.py          HTTP API
-frontend/src/pages/         Dashboard, DvSummary, Transactions, Dividends
+frontend/src/pages/         Dashboard (Portfolio), Dividends, Calendar
 ```
 
 ## Optional: secure remote access (not implemented)

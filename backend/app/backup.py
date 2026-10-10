@@ -36,7 +36,7 @@ def check_file(path: Path) -> dict:
             if version > SCHEMA_VERSION:
                 raise BackupError(f"Backup schema v{version} is newer than this app (v{SCHEMA_VERSION})")
             counts = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-                      for t in ("accounts", "instruments", "transactions", "dividend_events")}
+                      for t in ("brokers", "holdings", "instruments", "dividend_payments")}
         finally:
             con.close()
     except sqlite3.DatabaseError as exc:

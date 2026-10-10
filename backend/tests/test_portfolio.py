@@ -1,0 +1,220 @@
+"""Holdings, categories, valuation, import and backup through the public API."""
+import io
+from datetime import date, timedelta
+from decimal import Decimal as D
+
+import pytest
+
+from conftest import card, row
+
+TODAY = date.today()
+
+
+def ago(n):
+    return (TODAY - timedelta(days=n)).isoformat()
+
+
+def test_same_stock_at_two_brokers_is_one_row(api):
+    a, b = api.broker("Rakuten Trade"), api.broker("Moomoo")
+    cat = api.category("Blue chips")
+    api.holding(a["id"], "1155.KL", 1000, "10.00", category_id=cat["id"])
+    api.holding(b["id"], "1155.kl", 3000, "11.00")
+    iid = api.instrument_id("1155.KL")
+    api.price(iid, "12")
+    h = row(api.portfolio(), "1155.KL")
+    assert D(h["quantity"]) == 4000
+    assert D(h["avg_cost"]) == D("10.75")  # (10,000 + 33,000) / 4,000
+    assert D(h["gain"]) == 48000 - 43000
+    assert [l["broker"] for l in h["lots"]] == ["Moomoo", "Rakuten Trade"]
+    assert card(api.portfolio(), "Blue chips")["holdings"][0]["symbol"] == "1155.KL"
+
+
+def test_adding_existing_holding_updates_it(api):
+    a = api.broker()
+    api.holding(a["id"], "MSFT", 10, 400)
+    api.holding(a["id"], "MSFT", 12, 410)
+    hs = api.ok(api.c.get("/api/holdings"))
+    assert len(hs) == 1 and D(hs[0]["quantity"]) == 12 and D(hs[0]["avg_cost"]) == 410
+
+
+def test_pl_includes_dividends_received(api):
+    api.fx("USD", "MYR", "4.0")
+    a = api.broker()
+    api.holding(a["id"], "JEPQ", 100, 50)
+    iid = api.instrument_id("JEPQ")
+    api.price(iid, 55)
+    api.ok(api.c.post("/api/dividends/payments", json={"instrument_id": iid, "gross": "50", "tax": "15", "pay_date": ago(5)}))
+    pf = api.portfolio("MYR")
+    h = row(pf, "JEPQ")
+    assert D(h["gain"]) == 500 and D(h["dividends_net"]) == 35
+    assert D(h["total_pl"]) == 535 and D(h["pl_pct"]) == D("10.7")
+    assert D(h["total_pl_base"]) == 2140
+    assert D(pf["totals"]["value"]) == 5500 * 4
+
+
+def test_values_consistent_across_categories_and_currencies(api):
+    for q, r in (("MYR", "4.5"), ("SGD", "1.3"), ("GBP", "0.75"), ("HKD", "7.8")):
+        api.fx("USD", q, r)
+    a = api.broker()
+    c1, c2 = api.category("Income", True), api.category("Growth")
+    api.holding(a["id"], "D05.SI", 100, 30, category_id=c1["id"])
+    api.holding(a["id"], "5176.KL", 1000, 2, category_id=c1["id"])
+    api.holding(a["id"], "NVDA", 10, 100, category_id=c2["id"])
+    for s, p in (("D05.SI", 32), ("5176.KL", "2.10"), ("NVDA", 120)):
+        api.price(api.instrument_id(s), p)
+    pf = api.portfolio("MYR")
+    assert D(pf["totals"]["value"]) == sum(D(c["value"]) for c in pf["categories"])
+    expected = 3200 * (D("4.5") / D("1.3")) + 2100 + 1200 * D("4.5")
+    assert abs(D(pf["totals"]["value"]) - expected) < D("0.0001")
+    for base in ("USD", "SGD", "GBP", "HKD"):
+        other = api.portfolio(base)
+        assert all(f["rate"] is not None for f in other["fx"])
+        rate = D("4.5") if base == "USD" else None
+        if rate:
+            assert abs(D(other["totals"]["value"]) * rate - expected) < D("0.0001")
+
+
+def test_missing_price_is_na_and_excluded(api):
+    a = api.broker()
+    api.holding(a["id"], "1155.KL", 100, 10)
+    api.holding(a["id"], "5258.KL", 100, 2)
+    api.price(api.instrument_id("5258.KL"), "2.5")
+    pf = api.portfolio()
+    h = row(pf, "1155.KL")
+    assert h["price"] is None and h["market_value"] is None and h["pl_pct"] is None
+    assert h["price_status"] == "Unavailable" and pf["price_status"] == "Partial"
+    assert D(pf["totals"]["value"]) == 250 and pf["totals"]["incomplete"]
+
+
+def test_stale_provider_price_shows_cached(api):
+    from app.db import session_scope
+    from app.models import PriceHistory, utcnow
+    api.fx("USD", "MYR", "4.5")
+    a = api.broker()
+    api.holding(a["id"], "AAPL", 1, 100)
+    iid = api.instrument_id("AAPL")
+    with session_scope() as db:
+        db.add(PriceHistory(instrument_id=iid, price_date=TODAY, price=D(150), currency="USD", source="alpaca",
+                            quality="realtime", as_of=utcnow(), fetched_at=utcnow() - timedelta(hours=5)))
+    assert row(api.portfolio(), "AAPL")["price_status"] == "Cached"
+    with session_scope() as db:
+        db.query(PriceHistory).update({"fetched_at": utcnow()})
+    assert row(api.portfolio(), "AAPL")["price_status"] == "Live"
+
+
+def test_layout_moves_and_orders_stocks(api, client):
+    a = api.broker()
+    c1, c2 = api.category("Dividend"), api.category("Growth")
+    for s in ("AAPL", "MSFT", "NVDA"):
+        api.holding(a["id"], s, 1, 1, category_id=c1["id"])
+    ids = {s: api.instrument_id(s) for s in ("AAPL", "MSFT", "NVDA")}
+    api.ok(client.put("/api/layout", json={"categories": [
+        {"id": c2["id"], "instrument_ids": [ids["NVDA"], ids["AAPL"]]},
+        {"id": c1["id"], "instrument_ids": [ids["MSFT"]]},
+    ]}))
+    pf = api.portfolio()
+    assert [c["name"] for c in pf["categories"]] == ["Growth", "Dividend"]
+    assert [h["symbol"] for h in card(pf, "Growth")["holdings"]] == ["NVDA", "AAPL"]
+    api.ok(client.delete(f"/api/categories/{c2['id']}"))
+    pf = api.portfolio()
+    assert [h["symbol"] for h in card(pf, "Uncategorised")["holdings"]] == ["NVDA", "AAPL"]  # order kept
+    assert len(api.ok(client.get("/api/holdings"))) == 3  # deleting a category never deletes holdings
+
+
+def test_validation(api, client):
+    a = api.broker()
+    assert client.post("/api/holdings", json={"broker_id": a["id"], "symbol": "X", "quantity": "0", "avg_cost": "1"}).status_code == 422
+    assert client.post("/api/holdings", json={"broker_id": a["id"], "symbol": "X", "quantity": "-1", "avg_cost": "1"}).status_code == 422
+    assert client.post("/api/holdings", json={"broker_id": a["id"], "symbol": "X.KL", "quantity": "1", "avg_cost": "1",
+                                              "currency": "USD"}).status_code == 201  # new symbol takes given currency
+    assert client.post("/api/holdings", json={"broker_id": 999, "symbol": "Y", "quantity": "1", "avg_cost": "1"}).status_code == 422
+    assert client.post("/api/brokers", json={"name": "Rakuten Trade"}).status_code == 422
+    assert client.delete(f"/api/brokers/{a['id']}").status_code == 409
+
+
+def csv_bytes(text):
+    return text.encode()
+
+
+def test_import_csv_preview_replace_and_merge(api, client):
+    a = api.broker("Rakuten Trade")
+    api.holding(a["id"], "OLD.KL", 100, 1)
+    data = "Stock Code,Stock Name,Quantity,Avg Price\n1155.KL,Maybank,\"2,800\",RM10.18\n5176.KL,Sunway REIT,14300,1.95\n"
+    files = {"file": ("rakuten.csv", csv_bytes(data))}
+    pv = api.ok(client.post("/api/import/preview", files=files, data={"broker_id": a["id"]}))
+    assert pv["summary"]["new"] == 2 and [r["symbol"] for r in pv["summary"]["removed"]] == ["OLD.KL"]
+    assert len(api.ok(client.get("/api/holdings"))) == 1  # preview writes nothing
+    api.ok(client.post("/api/import/commit", files=files, data={"broker_id": a["id"]}))
+    hs = {h["symbol"]: h for h in api.ok(client.get("/api/holdings"))}
+    assert set(hs) == {"1155.KL", "5176.KL"} and D(hs["1155.KL"]["quantity"]) == 2800 and D(hs["1155.KL"]["avg_cost"]) == D("10.18")
+    # merge keeps what is not in the file
+    more = {"file": ("x.csv", csv_bytes("symbol,quantity,avg_cost\n5258.KL,3200,2.57\n"))}
+    api.ok(client.post("/api/import/commit", files=more, data={"broker_id": a["id"], "replace": "false"}))
+    assert len(api.ok(client.get("/api/holdings"))) == 3
+    again = api.ok(client.post("/api/import/preview", files=files, data={"broker_id": a["id"], "replace": "false"}))
+    assert again["summary"]["unchanged"] == 2
+
+
+def test_import_with_broker_and_category_columns_and_errors(api, client):
+    data = ("broker,symbol,quantity,avg_cost,category\n"
+            "Moomoo,NVDA,10,100,Growth\nLongbridge,JEPQ,5,55,Income\nLongbridge,BAD,abc,1,Income\n")
+    files = {"file": ("all.csv", csv_bytes(data))}
+    pv = api.ok(client.post("/api/import/preview", files=files))
+    assert pv["summary"]["errors"] == 1 and not pv["can_import"]
+    assert client.post("/api/import/commit", files=files).status_code == 422
+    assert api.ok(client.get("/api/brokers")) == []  # failed import changed nothing
+    ok = {"file": ("all.csv", csv_bytes(data.rsplit("Longbridge,BAD", 1)[0]))}
+    res = api.ok(client.post("/api/import/commit", files=ok))
+    assert set(res["summary"]["created"]["brokers"]) == {"Moomoo", "Longbridge"}
+    pf = api.portfolio()
+    assert {c["name"] for c in pf["categories"]} == {"Growth", "Income"}
+
+
+def test_import_excel_with_title_rows(api, client):
+    from openpyxl import Workbook
+    a = api.broker("Longbridge")
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Portfolio statement"])
+    ws.append([])
+    ws.append(["Symbol", "Shares", "Average Cost", "Currency"])
+    ws.append(["MSFT", 15, 418.4, "USD"])
+    ws.append(["AAPL", 23.62, 256.29, "USD"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    files = {"file": ("lb.xlsx", buf.getvalue())}
+    res = api.ok(client.post("/api/import/commit", files=files, data={"broker_id": a["id"]}))
+    assert res["summary"]["new"] == 2
+    hs = {h["symbol"]: h for h in api.ok(client.get("/api/holdings"))}
+    assert D(hs["AAPL"]["quantity"]) == D("23.62") and D(hs["MSFT"]["avg_cost"]) == D("418.4")
+    assert client.get("/api/holdings/export.csv").text.splitlines()[0].startswith("broker,symbol")
+
+
+def test_backup_restore_and_persistence(api, client, tmp_db):
+    a = api.broker("Keep")
+    b = api.ok(client.post("/api/backups"))
+    assert b["counts"]["brokers"] == 1
+    api.broker("Later")
+    api.ok(client.post(f"/api/backups/{b['name']}/restore"))
+    assert [x["name"] for x in api.ok(client.get("/api/brokers"))] == ["Keep"]
+    assert client.post("/api/restore", files={"file": ("x.db", b"not a database")}).status_code == 400
+    from app import db as dbmod
+    from app.migrations import migrate
+    migrate(dbmod.init_engine(tmp_db))
+    assert api.ok(client.get("/api/brokers"))[0]["id"] == a["id"]
+
+
+def test_frontend_or_message(client):
+    assert client.get("/").status_code in (200, 503)
+    assert client.get("/api/nope").status_code == 404
+
+
+@pytest.mark.parametrize("base", ["MYR", "USD", "SGD", "GBP", "HKD"])
+def test_every_base_currency(api, base):
+    for q, r in (("MYR", "4.5"), ("SGD", "1.3"), ("GBP", "0.75"), ("HKD", "7.8")):
+        api.fx("USD", q, r)
+    a = api.broker()
+    api.holding(a["id"], "AAPL", 1, 100)
+    api.price(api.instrument_id("AAPL"), 100)
+    pf = api.portfolio(base)
+    assert pf["base_currency"] == base and D(pf["totals"]["value"]) > 0
