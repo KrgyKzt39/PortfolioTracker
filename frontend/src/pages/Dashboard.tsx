@@ -16,6 +16,14 @@ const STATUS_STYLE: Record<PriceStatus, string> = {
   Unavailable: "bg-black/40 text-red-300",
   Partial: "bg-black/40 text-amber-200",
 };
+const PRICE_WORD: Record<PriceStatus, string> = {
+  Live: "Live",
+  Delayed: "Delayed",
+  Cached: "Last known",
+  Manual: "Entered by you",
+  Unavailable: "No price yet",
+  Partial: "Partial",
+};
 const STATUS_HELP: Record<PriceStatus, string> = {
   Live: "Real-time quotes from the provider",
   Delayed: "Provider quotes, typically 15+ minutes delayed",
@@ -65,14 +73,8 @@ export function Dashboard({ onShowTransactions }: { onShowTransactions: (filter:
           <Button variant="secondary" onClick={() => open({ kind: "account" })}>
             <Plus className="h-4 w-4" /> Account
           </Button>
-          <Button variant="ghost" onClick={() => open({ kind: "import" })}>
-            <Upload className="h-4 w-4" /> Import CSV
-          </Button>
         </div>
       )}
-      <p className="px-2 pb-4 text-2xs leading-relaxed text-faint">
-        P/L = capital gain (unrealised + realised) + net dividends − fees. Return % is P/L ÷ current cost basis. Base-currency totals translate each holding at the latest FX rate; FX effect on cost is shown separately in holding details.
-      </p>
     </div>
   );
 }
@@ -370,34 +372,20 @@ function HoldingDetail({ h, account, base, hidden, onShowTransactions }: { h: Ho
   const open = useOpenSheet();
   const c = h.currency;
   const m = (v: string | null, signed = false, ccy = c) => money(v, ccy, { signed, hidden });
+  const hasDiv = Number(h.dividends_net) !== 0;
   const rows: [string, string, string?][] = [
-    ["Quantity", qty(h.quantity)],
-    ["Average cost", priceStr(h.avg_cost, c)],
-    ["Cost basis", m(h.cost)],
-    ["Price", `${priceStr(h.price, c)} · ${h.price_status}${h.price_date ? ` (${h.price_date})` : ""}`],
-    ["Market value", m(h.market_value)],
-    ["Unrealised", m(h.unrealized, true), tone(h.unrealized)],
-    ["Realised", m(h.realized, true), tone(h.realized)],
-    ["Dividends gross / tax", `${m(h.dividends_gross)} / ${m(h.dividend_tax)}`],
-    ["Dividends net", m(h.dividends_net, true), "text-up"],
-    ["Fees & taxes", m(h.fees)],
-    ["Total P/L", `${m(h.total_pl, true)} (${pct(h.pl_pct, { signed: true })})`, tone(h.total_pl)],
-    ["Est. annual DV (gross / net)", `${m(h.est_annual_dividend)} / ${m(h.est_annual_dividend_net)}`, "text-gold"],
-    ["DPS", h.dps ? `${priceStr(h.dps, c)} · ${h.dps_source}` : "N/A"],
-    ["Yield / yield on cost", `${pct(h.dividend_yield)} / ${pct(h.yield_on_cost)}`],
-    ["Withholding tax", pct(Number(h.withholding_tax_rate) * 100, { dp: 0 })],
+    ["Value", m(h.market_value)],
+    ["Cost", `${m(h.cost)} · avg ${priceStr(h.avg_cost, c)}`],
+    ["Gain / loss", m(h.capital_gain, true), tone(h.capital_gain)],
   ];
-  if (c !== base) {
-    rows.push(
-      [`Value in ${base}`, m(h.market_value_base, false, base)],
-      [`P/L in ${base} (at today's FX)`, m(h.total_pl_base, true, base), tone(h.total_pl_base)],
-      ["FX effect on cost", h.fx_effect_base === null ? "N/A (missing historical FX)" : m(h.fx_effect_base, true, base), tone(h.fx_effect_base)],
-    );
-  }
+  if (hasDiv) rows.push(["Dividends received", m(h.dividends_net, true), "text-up"]);
+  if (h.est_annual_dividend_net) rows.push(["Est. yearly dividend", `${m(h.est_annual_dividend_net)} · ${pct(h.dividend_yield)} yield`, "text-gold"]);
+  if (c !== base) rows.push([`Value in ${base}`, m(h.market_value_base, false, base)]);
+  rows.push(["Price", `${PRICE_WORD[h.price_status]}${h.price_source && h.price_source !== "manual" ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${h.price_date}` : ""}`]);
   return (
     <div className="bg-ink-850/70 px-5 pb-4 pt-1">
       {h.name && <p className="pb-2 text-xs text-muted">{h.name}</p>}
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[12.5px] sm:grid-cols-2">
+      <dl className="grid grid-cols-1 gap-y-1.5 text-[13px]">
         {rows.map(([k, v, cls]) => (
           <div key={k} className="flex justify-between gap-3">
             <dt className="text-muted">{k}</dt>

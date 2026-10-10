@@ -13,7 +13,9 @@ _sched: BackgroundScheduler | None = None
 
 
 def _providers_enabled(s: dict) -> bool:
-    return bool(s["yahoo_enabled"] or s["frankfurter_enabled"] or config.ALPHAVANTAGE_API_KEY)
+    return bool(s["yahoo_enabled"] or s["frankfurter_enabled"] or config.ALPHAVANTAGE_API_KEY
+                or (s["alpaca_enabled"] and config.alpaca_configured())
+                or (s["longbridge_enabled"] and config.longbridge_configured()))
 
 
 def _tick():

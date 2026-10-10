@@ -67,7 +67,8 @@ def meta():
     return {"currencies": CURRENCIES, "transaction_types": TXN_TYPES, "dividend_statuses": DIVIDEND_STATUSES,
             "demo": config.DEMO, "db_path": str(config.DB_PATH.name), "lan_urls":
             [f"http://{ip}:{config.PORT}" for ip in lan_addresses()] if config.HOST in ("0.0.0.0", "") else [],
-            "alphavantage_configured": bool(config.ALPHAVANTAGE_API_KEY)}
+            "alphavantage_configured": bool(config.ALPHAVANTAGE_API_KEY),
+            "alpaca_configured": config.alpaca_configured(), "longbridge_configured": config.longbridge_configured()}
 
 
 @router.get("/settings")

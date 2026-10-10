@@ -244,6 +244,8 @@ export interface DividendSummary {
 
 export interface Settings {
   base_currency: Currency;
+  longbridge_enabled: boolean;
+  alpaca_enabled: boolean;
   yahoo_enabled: boolean;
   frankfurter_enabled: boolean;
   refresh_interval_minutes: number;
@@ -259,4 +261,6 @@ export interface Meta {
   db_path: string;
   lan_urls: string[];
   alphavantage_configured: boolean;
+  alpaca_configured: boolean;
+  longbridge_configured: boolean;
 }

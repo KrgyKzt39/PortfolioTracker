@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { cn, money, priceStr, qty, shortDate, today } from "../lib/format";
-import { useAccounts, useDividendEvents, useInstruments, useInvalidateAll, useOpenSheet, usePrivacy } from "../lib/hooks";
+import { useDividendEvents, useInstruments, useInvalidateAll, useOpenSheet, usePrivacy } from "../lib/hooks";
 import type { DividendEvent, Txn } from "../lib/types";
 import { Badge, Button, Card, ConfirmSheet, Empty, ErrorBox, Field, Input, Segmented, Select, Sheet, Spinner, Textarea, useToast } from "../components/ui";
 import { TickerBadge } from "../components/TickerBadge";
@@ -15,14 +15,11 @@ const STATUS_STYLE: Record<string, string> = {
   received: "bg-up/15 text-emerald-300",
 };
 
-type View = "upcoming" | "events" | "history";
+type View = "upcoming" | "history";
 
 export function Dividends() {
   const [view, setView] = useState<View>("upcoming");
-  const [status, setStatus] = useState("");
   const [instrument, setInstrument] = useState("");
-  const [account, setAccount] = useState("");
-  const accounts = useAccounts();
   const instruments = useInstruments();
   const openSheet = useOpenSheet();
   const [editing, setEditing] = useState<DividendEvent | "new" | null>(null);
@@ -30,12 +27,10 @@ export function Dividends() {
 
   const params = useMemo(() => {
     const p = new URLSearchParams();
-    if (status) p.set("status", status);
     if (instrument) p.set("instrument_id", instrument);
-    if (account) p.set("account_id", account);
     const s = p.toString();
     return s ? `?${s}` : "";
-  }, [status, instrument, account]);
+  }, [instrument]);
   const events = useDividendEvents(params);
 
   return (
@@ -43,7 +38,7 @@ export function Dividends() {
       <div className="flex items-center justify-between px-1">
         <h1 className="text-2xl font-extrabold text-white">Dividends</h1>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => openSheet({ kind: "transaction", preset: { type: "DIVIDEND", account_id: account || undefined, instrument_id: instrument || undefined } })}>
+          <Button variant="secondary" onClick={() => openSheet({ kind: "transaction", preset: { type: "DIVIDEND", instrument_id: instrument || undefined } })}>
             Record
           </Button>
           <Button onClick={() => setEditing("new")}>
@@ -57,48 +52,29 @@ export function Dividends() {
         onChange={setView}
         options={[
           { value: "upcoming", label: "Upcoming" },
-          { value: "events", label: "All events" },
           { value: "history", label: "Received" },
         ]}
       />
-      <div className="grid grid-cols-3 gap-2">
-        <Select aria-label="Filter by account" value={account} onChange={(e) => setAccount(e.target.value)}>
-          <option value="">Account</option>
-          {(accounts.data ?? []).map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </Select>
-        <Select aria-label="Filter by security" value={instrument} onChange={(e) => setInstrument(e.target.value)}>
-          <option value="">Security</option>
-          {(instruments.data ?? []).map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.symbol}
-            </option>
-          ))}
-        </Select>
-        <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} disabled={view === "history"}>
-          <option value="">Status</option>
-          {["forecast", "announced", "pending", "received"].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <Select aria-label="Filter by security" value={instrument} onChange={(e) => setInstrument(e.target.value)}>
+        <option value="">All holdings</option>
+        {(instruments.data ?? []).map((i) => (
+          <option key={i.id} value={i.id}>
+            {i.symbol}
+          </option>
+        ))}
+      </Select>
 
       {view === "history" ? (
-        <History account={account} instrument={instrument} />
+        <History instrument={instrument} />
       ) : events.isLoading ? (
         <Spinner label="Loading events" />
       ) : events.error ? (
         <ErrorBox error={events.error} onRetry={() => events.refetch()} />
       ) : (
-        <EventList events={events.data!} upcoming={view === "upcoming"} onEdit={setEditing} onReconcile={setReconciling} />
+        <EventList events={events.data!} upcoming onEdit={setEditing} onReconcile={setReconciling} />
       )}
       <p className="px-2 pb-4 text-2xs leading-relaxed text-faint">
-        Eligible shares are those held at the close of the day before the ex-date. Forecast, announced and pending dividends are expectations only; they become income when you reconcile them with the amount actually received.
+        Upcoming dividends are expectations. Tap one and choose “Reconcile received” once the money arrives.
       </p>
       {editing && <EventSheet event={editing === "new" ? undefined : editing} defaultInstrument={instrument} onClose={() => setEditing(null)} />}
       {reconciling && <ReconcileSheet event={reconciling} onClose={() => setReconciling(null)} />}
@@ -114,7 +90,7 @@ function EventList({ events, upcoming, onEdit, onReconcile }: { events: Dividend
   if (list.length === 0)
     return (
       <Card>
-        <Empty title={upcoming ? "Nothing upcoming" : "No dividend events"}>Add announced or forecast dividends with “+ Event”. Each event lists eligible shares and expected income per account.</Empty>
+        <Empty title={upcoming ? "Nothing upcoming" : "No dividend events"}>Add an announced dividend with “+ Event” to see what you should receive.</Empty>
       </Card>
     );
   const groups: { key: string; items: DividendEvent[] }[] = [];
@@ -246,11 +222,10 @@ function EventRow({ e, overdue, onEdit, onReconcile }: { e: DividendEvent; overd
   );
 }
 
-function History({ account, instrument }: { account: string; instrument: string }) {
+function History({ instrument }: { instrument: string }) {
   const { hidden } = usePrivacy();
   const openSheet = useOpenSheet();
   const p = new URLSearchParams({ type: "DIVIDEND,DRIP", limit: "500" });
-  if (account) p.set("account_id", account);
   if (instrument) p.set("instrument_id", instrument);
   const q = useQuery({ queryKey: ["transactions", "div-history", p.toString()], queryFn: () => api<{ total: number; items: Txn[] }>(`/transactions?${p}`) });
   if (q.isLoading) return <Spinner />;

@@ -343,6 +343,7 @@ function TransactionEditor({ init, txn, onClose }: { init: TxnForm; txn?: Txn & 
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newInst, setNewInst] = useState(false);
+  const [more, setMore] = useState(!!(init.fx_rate || init.note));
   const [ni, , setNi] = useFormState<Record<string, string>>(emptyInstrument());
 
   const acctList = (accounts.data ?? []).filter((a) => !a.archived || String(a.id) === v.account_id);
@@ -613,7 +614,12 @@ function TransactionEditor({ init, txn, onClose }: { init: TxnForm; txn?: Txn & 
             {(id) => <Input id={id} inputMode="decimal" value={v.split_ratio} onChange={set("split_ratio")} placeholder="2" />}
           </Field>
         )}
-        {showFx && (
+        {!more && (
+          <button type="button" className="text-xs text-blue-300 hover:underline" onClick={() => setMore(true)}>
+            {showFx ? "Add note or FX rate" : "Add note"}
+          </button>
+        )}
+        {more && showFx && (
           <div className="grid grid-cols-2 gap-3">
             <Field label={`FX rate (optional)`} error={fe("fx_rate")} hint={`1 ${tradeCcy} = ? ${v.fx_currency || baseCcy} on trade date`}>
               {(id) => <Input id={id} inputMode="decimal" value={v.fx_rate} onChange={set("fx_rate")} placeholder="e.g. 4.45" />}
@@ -629,7 +635,7 @@ function TransactionEditor({ init, txn, onClose }: { init: TxnForm; txn?: Txn & 
             </Field>
           </div>
         )}
-        <Field label="Note">{(id) => <Input id={id} value={v.note} onChange={set("note")} placeholder="Optional" />}</Field>
+        {more && <Field label="Note">{(id) => <Input id={id} value={v.note} onChange={set("note")} placeholder="Optional" />}</Field>}
         {preview !== null && cashCcy && (
           <p className="text-xs text-muted">
             Cash effect: <span className={cn("tabular font-semibold", preview >= 0 ? "text-up" : "text-down")}>{money(preview, cashCcy, { signed: true })}</span>

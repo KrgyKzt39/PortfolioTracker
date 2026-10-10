@@ -16,7 +16,7 @@ from .. import config
 from ..db import session_scope
 from ..models import CURRENCIES, FxRate, Instrument, PriceHistory, utcnow
 from ..services import get_settings
-from .providers import AlphaVantage, FrankfurterFx, ProviderError, YahooChart
+from .providers import AlpacaData, AlphaVantage, FrankfurterFx, LongbridgeQuotes, ProviderError, YahooChart
 
 
 class RefreshState:
@@ -42,6 +42,22 @@ class RefreshState:
 
 STATE = RefreshState()
 _client_factory = lambda: httpx.Client(follow_redirects=True)  # noqa: E731  (patched in tests)
+_longbridge_ctx = None  # injected in tests; otherwise the SDK connects on first use
+
+
+def price_providers(client, settings: dict) -> list:
+    """Price sources in priority order: official APIs first, the unofficial Yahoo feed last."""
+    chain = []
+    if settings["longbridge_enabled"] and config.longbridge_configured():
+        chain.append(LongbridgeQuotes(config.LONGBRIDGE_APP_KEY, config.LONGBRIDGE_APP_SECRET,
+                                      config.LONGBRIDGE_ACCESS_TOKEN, ctx=_longbridge_ctx))
+    if settings["alpaca_enabled"] and config.alpaca_configured():
+        chain.append(AlpacaData(client, config.ALPACA_API_KEY_ID, config.ALPACA_API_SECRET_KEY, config.ALPACA_DATA_FEED))
+    if config.ALPHAVANTAGE_API_KEY:
+        chain.append(AlphaVantage(client, config.ALPHAVANTAGE_API_KEY))
+    if settings["yahoo_enabled"]:
+        chain.append(YahooChart(client))
+    return chain
 
 
 def _upsert_price(db, inst: Instrument, q):
@@ -100,28 +116,33 @@ def refresh_all() -> dict:
         elif not fxp and not yahoo:
             results["fx"] = "no FX provider enabled (manual rates only)"
 
-        for inst in instruments:
-            chain = []
-            if yahoo:
-                chain.append((yahoo, inst.provider_symbol or inst.symbol))
-            if av and inst.currency == "USD" and "." not in inst.symbol:
-                chain.append((av, inst.provider_symbol or inst.symbol))
-            if not chain:
-                errors[inst.symbol] = "no provider available (enable one in Settings or enter a manual price)"
+        remaining = {i.id: i for i in instruments}
+        tried: dict[int, list[str]] = {i.id: [] for i in instruments}
+        for provider in price_providers(client, settings):
+            wanted = {iid: provider.map_symbol(inst) for iid, inst in remaining.items()}
+            wanted = {iid: sym for iid, sym in wanted.items() if sym}
+            if not wanted:
                 continue
-            for provider, sym in chain:
-                try:
-                    q = provider.fetch_price(sym)
-                    if q.currency and q.currency != inst.currency:
-                        raise ProviderError(f"provider currency {q.currency} != {inst.currency}")
-                    q.currency = inst.currency
-                    with session_scope() as db:
-                        _upsert_price(db, db.get(Instrument, inst.id), q)
-                    results[inst.symbol] = provider.name
-                    errors.pop(inst.symbol, None)
-                    break
-                except ProviderError as exc:
-                    errors[inst.symbol] = f"{provider.name}: {exc}"
+            try:
+                quotes, errs = provider.fetch_prices(sorted(set(wanted.values())))
+            except ProviderError as exc:
+                quotes, errs = {}, {sym: str(exc) for sym in wanted.values()}
+            for iid, sym in wanted.items():
+                inst, q = remaining[iid], quotes.get(sym)
+                if q is None:
+                    tried[iid].append(f"{provider.name}: {errs.get(sym, 'no quote')}")
+                    continue
+                if q.currency and q.currency != inst.currency:
+                    tried[iid].append(f"{provider.name}: currency {q.currency} != {inst.currency}")
+                    continue
+                q.currency = inst.currency
+                with session_scope() as db:
+                    _upsert_price(db, db.get(Instrument, iid), q)
+                results[inst.symbol] = provider.name
+                del remaining[iid]
+        for iid, inst in remaining.items():
+            errors[inst.symbol] = "; ".join(tried[iid]) or (
+                "no enabled provider covers this symbol (enter a manual price, or enable Yahoo for .KL)")
 
     from ..snapshots import write_snapshot
     try:

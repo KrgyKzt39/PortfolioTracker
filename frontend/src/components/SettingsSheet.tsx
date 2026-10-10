@@ -50,43 +50,39 @@ function SettingsBody({ s }: { s: Settings }) {
         <Toggle checked={s.hide_values} onChange={(v) => update({ hide_values: v })} label="Hide values on open" description="Start with amounts masked (tap the eye icon to reveal)." />
       </Section>
 
-      <Section title="Market data">
-        <Toggle checked={s.frankfurter_enabled} onChange={(v) => update({ frankfurter_enabled: v })} label="FX: Frankfurter (ECB reference rates)" description="Free, documented, no key. Updated once per working day." />
+      <Section title="Price sources">
+        <p className="text-2xs text-faint">Tried in this order. Keys are set in the .env file on your PC and never leave it.</p>
+        <Toggle
+          checked={s.longbridge_enabled}
+          onChange={(v) => update({ longbridge_enabled: v })}
+          label="Longbridge"
+          description={meta.data?.longbridge_configured ? "US, Hong Kong and Singapore. Connected via your keys." : "US, Hong Kong and Singapore. Add LONGBRIDGE_APP_KEY, _APP_SECRET and _ACCESS_TOKEN to .env."}
+        />
+        <Toggle
+          checked={s.alpaca_enabled}
+          onChange={(v) => update({ alpaca_enabled: v })}
+          label="Alpaca"
+          description={meta.data?.alpaca_configured ? "US stocks and ETFs. Connected via your keys." : "US stocks and ETFs. Add ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY to .env (free account)."}
+        />
         <Toggle
           checked={s.yahoo_enabled}
           onChange={(v) => update({ yahoo_enabled: v })}
-          label="Prices: Yahoo Finance (unofficial)"
-          description="Covers Bursa (.KL), US, SGX, HKEX, LSE. Not an officially documented API: it may break or rate-limit. Quotes are delayed."
+          label="Yahoo Finance (unofficial)"
+          description="Last resort, and the only free source with Bursa (.KL) prices. Not an official API, so it can break."
         />
-        <p className="text-2xs text-faint">Alpha Vantage (US stocks): {meta.data?.alphavantage_configured ? "configured via ALPHAVANTAGE_API_KEY" : "not configured. Set ALPHAVANTAGE_API_KEY in .env (free key)."}</p>
-        <form
-          className="grid grid-cols-2 gap-3"
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            update({ refresh_interval_minutes: Number(interval), stale_after_minutes: Number(stale) });
-          }}
-        >
-          <Field label="Auto refresh (minutes)">{(id) => <Input id={id} inputMode="numeric" value={interval} onChange={(e) => setInterval(e.target.value)} />}</Field>
-          <Field label="Mark cached after (min)">{(id) => <Input id={id} inputMode="numeric" value={stale} onChange={(e) => setStale(e.target.value)} />}</Field>
-          <Button type="submit" variant="secondary" className="col-span-2">
-            Save intervals
-          </Button>
-        </form>
-        {refresh.data && (
-          <div className="rounded-xl bg-ink-900 p-3 text-2xs text-muted">
-            <p>
-              Last refresh: {refresh.data.finished_at ? dateTime(refresh.data.finished_at) : "not run this session"} · {refresh.data.message}
-            </p>
+        <Toggle checked={s.frankfurter_enabled} onChange={(v) => update({ frankfurter_enabled: v })} label="Exchange rates (ECB)" description="Daily reference rates for MYR, USD, SGD, GBP, HKD." />
+        {refresh.data && Object.keys(refresh.data.errors).length > 0 && (
+          <details className="rounded-xl bg-ink-900 p-3 text-2xs text-muted">
+            <summary className="cursor-pointer">Last refresh: {refresh.data.message}</summary>
             {Object.entries(refresh.data.errors).map(([k, v]) => (
-              <p key={k} className="text-amber-200/80">
+              <p key={k} className="mt-1 text-amber-200/80">
                 {k}: {v}
               </p>
             ))}
-          </div>
+          </details>
         )}
       </Section>
 
-      <FxSection />
 
       <Section
         title="Accounts"
@@ -140,7 +136,28 @@ function SettingsBody({ s }: { s: Settings }) {
       </Section>
 
       <DataSection />
-      <AuditSection />
+
+      <details className="group">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-muted">Advanced</summary>
+        <div className="mt-4 space-y-6">
+          <form
+            className="grid grid-cols-2 gap-3"
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              update({ refresh_interval_minutes: Number(interval), stale_after_minutes: Number(stale) });
+            }}
+          >
+            <Field label="Auto refresh (minutes)">{(id) => <Input id={id} inputMode="numeric" value={interval} onChange={(e) => setInterval(e.target.value)} />}</Field>
+            <Field label="Mark as old after (min)">{(id) => <Input id={id} inputMode="numeric" value={stale} onChange={(e) => setStale(e.target.value)} />}</Field>
+            <Button type="submit" variant="secondary" className="col-span-2">
+              Save intervals
+            </Button>
+          </form>
+          <p className="text-2xs text-faint">Alpha Vantage (US, optional): {meta.data?.alphavantage_configured ? "configured" : "set ALPHAVANTAGE_API_KEY in .env"}.</p>
+          <FxSection />
+          <AuditSection />
+        </div>
+      </details>
 
       <Section title="iPhone access">
         <div className="space-y-1 text-xs text-muted">

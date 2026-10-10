@@ -192,7 +192,7 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByTestId("total-value")).toContainText("••••");
     await page.getByRole("button", { name: "Show values" }).click();
     await page.getByRole("button", { name: "Settings" }).click();
-    await expect(dialog(page).getByText("FX rates")).toBeVisible();
+    await expect(dialog(page).getByText("Price sources")).toBeVisible();
     await dialog(page).getByRole("button", { name: "Backup now" }).click();
     await expect(page.getByText(/Backup created/)).toBeVisible();
     await dialog(page).getByRole("button", { name: "Close" }).click();

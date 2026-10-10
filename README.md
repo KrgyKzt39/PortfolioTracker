@@ -45,18 +45,22 @@ The app has **no login**. Do not port-forward it or expose it to the internet.
 
 ## Market data
 
-Prices and FX go through a provider layer with timeouts, retries with backoff, per-provider rate limiting, fallback order and last-known-good values. Refresh runs in a background thread so the UI never waits on it.
+Price sources are tried in order; the first one that covers a symbol and returns a quote is used, and anything it can't price falls through to the next. Each source has timeouts, retries and rate limits, and a failed refresh keeps the last good price. Refresh runs in the background so the app never waits on it.
 
-| Provider | Data | Status | Notes |
+| Order | Source | Covers | Setup |
 |---|---|---|---|
-| Manual | prices, NAVs, FX | always on | Works with no internet. Labelled **Manual**. |
-| Frankfurter (ECB) | FX for all five currencies | on by default | Documented, free, keyless. Daily reference rates. |
-| Yahoo Finance chart endpoint | .KL, US, SGX, HKEX, LSE prices; FX fallback | **off by default** | Not an officially documented API and may break or rate-limit. Enable it in Settings if you accept that. |
-| Alpha Vantage | US stocks | needs free key | Documented. Free tier is about 25 requests/day. |
+| 1 | **Longbridge OpenAPI** (official SDK) | US, Hong Kong, Singapore | Longbridge account + app key, secret, access token in `.env` |
+| 2 | **Alpaca** (documented REST API) | US stocks and ETFs | Free Alpaca account (paper is fine), key ID + secret in `.env` |
+| 3 | Alpha Vantage | US | Optional free key, ~25 requests/day |
+| 4 | Yahoo Finance (unofficial, **off by default**) | Everything incl. Bursa (.KL) | Toggle in Settings |
+| – | Manual | Anything, incl. ASNB | Always available |
+| FX | Frankfurter (ECB reference rates) | MYR, USD, SGD, GBP, HKD | On by default, no key |
 
-Price labels are honest: **Delayed** for provider quotes, **Cached** when the last good quote is older than the freshness window (or refresh failed), **Manual** for your entries, **Unavailable** when there is no price (values show N/A and are excluded from totals). **Live** is shown only if a provider reports real-time data; none of the free providers do.
+Symbols are mapped automatically: `MSFT` → `MSFT.US`, `0005.HK` → `5.HK`, `D05.SI` → `D05.SG` for Longbridge; plain US tickers for Alpaca.
 
-Unsupported funds such as ASNB: set the instrument's pricing to *Manual*, enter the NAV, and set a forward dividend per share (e.g. 0.0475 for 4.75%) to get income estimates.
+**Bursa Malaysia:** neither Longbridge nor Alpaca covers .KL stocks. For those, either enter prices manually or enable Yahoo in Settings as a last resort.
+
+**Labels:** a price is shown as **Live** only when the quote's own timestamp is under 5 minutes old. Older quotes (delayed feeds, market closed) show **Delayed**; prices older than the freshness window or from a failed refresh show **Cached**; your entries show **Manual**; no price shows **Unavailable** and is left out of totals. Alpaca's free feed is real-time but IEX-only; Longbridge depends on your quote package.
 
 ## How the numbers are calculated
 

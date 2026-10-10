@@ -12,6 +12,8 @@ from .models import AuditLog, Setting
 
 DEFAULT_SETTINGS = {
     "base_currency": "MYR",
+    "longbridge_enabled": True,  # used only when credentials are set in .env
+    "alpaca_enabled": True,  # used only when credentials are set in .env
     "yahoo_enabled": False,  # unofficial endpoint: opt-in only
     "frankfurter_enabled": True,  # documented ECB reference-rate API
     "refresh_interval_minutes": 30,
