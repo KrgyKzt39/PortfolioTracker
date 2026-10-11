@@ -3,28 +3,28 @@ import { cn } from "../lib/format";
 
 export type Tab = "portfolio" | "dashboard" | "dividends" | "calendar" | "ask";
 export const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
-  { id: "portfolio", label: "Portfolio", icon: BarChart3 },
   { id: "dashboard", label: "Dashboard", icon: PieChart },
+  { id: "portfolio", label: "Portfolio", icon: BarChart3 },
   { id: "dividends", label: "Dividends", icon: DollarSign },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "ask", label: "Ask AI", icon: Sparkles },
+  { id: "ask", label: "AI assistant", icon: Sparkles },
 ];
 
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   return (
-    <nav aria-label="Main" className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/90 backdrop-blur-xl">
-      <ul className="mx-auto flex max-w-[640px] px-1.5 pt-1.5">
+    <nav aria-label="Main" className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t-[0.5px] border-line bg-surface/80 backdrop-blur-xl backdrop-saturate-150 dark:bg-[#161618]/85">
+      <ul className="mx-auto flex max-w-[640px]">
         {TABS.map(({ id, label, icon: Icon }) => {
           const active = id === tab;
           return (
-            <li key={id} className="flex-1 px-0.5 pb-1.5">
+            <li key={id} className="flex-1">
               <button
                 type="button"
                 onClick={() => onChange(id)}
                 aria-current={active ? "page" : undefined}
-                className={cn("flex w-full flex-col items-center gap-0.5 rounded-xl pb-1.5 pt-2 text-[10.5px] font-medium transition-colors", active ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:text-fg2")}
+                className={cn("flex w-full flex-col items-center gap-[3px] pb-1 pt-[7px] text-[10px] font-medium tracking-[0.01em]", active ? "text-accent" : "text-muted")}
               >
-                <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.1 : 1.7} aria-hidden />
+                <Icon className="h-[25px] w-[25px]" strokeWidth={active ? 2.2 : 1.8} aria-hidden />
                 {label}
               </button>
             </li>

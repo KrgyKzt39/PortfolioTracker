@@ -21,7 +21,7 @@ const day = (n: number) => new Date(Date.now() + n * 86400e3).toISOString().slic
 
 test.describe.serial("portfolio flow", () => {
   test("first holding creates the broker; no price shows N/A", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await expect(page.getByText("Add your holdings")).toBeVisible();
     await page.getByRole("button", { name: "Add holding" }).click();
     const d = dialog(page);
@@ -32,12 +32,13 @@ test.describe.serial("portfolio flow", () => {
     await d.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("1155.KL added")).toBeVisible();
     await expect(page.getByRole("button", { name: "1155.KL details" })).toContainText("N/A");
-    await expect(page.getByTestId("price-status")).toHaveText("Unavailable");
     await noHorizontalScroll(page);
+    await page.getByRole("navigation").getByRole("button", { name: "Dashboard" }).click();
+    await expect(page.getByTestId("price-status")).toHaveText("Unavailable");
   });
 
   test("manual price gives value and P/L", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "1155.KL details" }).click();
     await page.getByRole("button", { name: "Enter price" }).click();
     await dialog(page).getByLabel(/^Price/).fill("11");
@@ -45,12 +46,14 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText("1155.KL price saved")).toBeVisible();
     await dialog(page).getByRole("button", { name: "Close" }).click();
     await expect(page.getByTestId("total-value")).toHaveText("RM11,000.00");
-    await expect(page.getByRole("button", { name: "1155.KL details" })).toContainText("+RM980.00");
+    await expect(page.getByRole("button", { name: "1155.KL details" })).toContainText("+9.78%");
+    await expect(page.locator("dd").getByText("+RM980.00 (+9.78%)")).toBeVisible();
+    await page.getByRole("navigation").getByRole("button", { name: "Dashboard" }).click();
     await expect(page.getByTestId("price-status")).toHaveText("Manual");
   });
 
   test("same stock at a second broker merges into one row", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "1155.KL details" }).click();
     await page.getByRole("button", { name: "Another broker" }).click();
     const d = dialog(page);
@@ -65,7 +68,7 @@ test.describe.serial("portfolio flow", () => {
   });
 
   test("upload a CSV for a broker with preview", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "Upload" }).click();
     const d = dialog(page);
     await d.getByLabel("Broker", { exact: true }).selectOption({ label: "Moomoo" });
@@ -82,7 +85,7 @@ test.describe.serial("portfolio flow", () => {
   });
 
   test("categories: create one and move a stock with Arrange", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "Arrange" }).click();
     await page.getByRole("button", { name: "New category" }).click();
     await dialog(page).getByLabel("Name").fill("Blue chips");
@@ -115,7 +118,8 @@ test.describe.serial("portfolio flow", () => {
 
   test("dividend: add, confirm received, counts in returns", async ({ page }) => {
     await page.goto("/#/calendar");
-    await page.getByRole("main").getByRole("button", { name: "Dividend", exact: true }).click();
+    await page.getByRole("button", { name: "Add a date" }).click();
+    await page.getByRole("menuitem", { name: "Dividend date" }).click();
     let d = dialog(page);
     await d.getByLabel("Stock").selectOption({ label: "1155.KL" });
     await d.getByLabel("Ex-date").fill(day(-20));
@@ -136,7 +140,8 @@ test.describe.serial("portfolio flow", () => {
 
   test("calendar shows earnings and upcoming dividends", async ({ page }) => {
     await page.goto("/#/calendar");
-    await page.getByRole("main").getByRole("button", { name: "Earnings", exact: true }).click();
+    await page.getByRole("button", { name: "Add a date" }).click();
+    await page.getByRole("menuitem", { name: "Earnings date" }).click();
     const d = dialog(page);
     await d.getByLabel("Stock").selectOption({ label: "NVDA" });
     await d.getByLabel("Date").fill(day(12));
@@ -148,7 +153,7 @@ test.describe.serial("portfolio flow", () => {
   });
 
   test("fund or savings: EPF balance with amount put in", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await page.getByRole("main").getByRole("button", { name: "Add", exact: true }).click();
     const d = dialog(page);
     await d.getByRole("radio", { name: "Fund or savings" }).click();
@@ -160,8 +165,8 @@ test.describe.serial("portfolio flow", () => {
     await d.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("EPF added")).toBeVisible();
     const epf = page.getByRole("button", { name: "EPF details" });
-    await expect(epf).toContainText("RM85,000");
-    await expect(epf).toContainText("+RM15,000"); // table rounds to whole units from 1,000
+    await expect(epf).toContainText("RM85,000.00");
+    await expect(epf).toContainText("+21.43%");
     await epf.click();
     await expect(page.getByText("+RM15,000.00").first()).toBeVisible(); // details keep cents
   });
@@ -173,7 +178,7 @@ test.describe.serial("portfolio flow", () => {
     await page.getByRole("radio", { name: "Broker" }).click();
     await expect(page.getByText("KWSP")).toBeVisible();
     await page.getByRole("radio", { name: "Currency" }).click();
-    await expect(page.getByText("MYR", { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").locator("li").getByText("MYR", { exact: true })).toBeVisible();
   });
 
   test("AI: statement PDF goes through the normal preview, and Ask answers", async ({ page }) => {
@@ -196,7 +201,7 @@ test.describe.serial("portfolio flow", () => {
       asked = route.request().postDataJSON().messages;
       await route.fulfill({ json: { answer: "- Most of your value is in MYR (about 60%).", provider: "gemini" } });
     });
-    await page.goto("/");
+    await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "Upload" }).click();
     const d = dialog(page);
     await d.getByLabel("Broker", { exact: true }).selectOption({ label: "Moomoo" });
@@ -206,7 +211,7 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText(/Imported: 1 new/)).toBeVisible();
     await expect(page.getByRole("button", { name: "5258.KL details" })).toBeVisible();
 
-    await page.getByRole("navigation").getByRole("button", { name: "Ask AI" }).click();
+    await page.getByRole("navigation").getByRole("button", { name: "AI assistant" }).click();
     const a = page.getByRole("main");
     await a.getByRole("button", { name: /split by currency/ }).click();
     await expect(a.getByText("Most of your value is in MYR")).toBeVisible();
@@ -214,7 +219,7 @@ test.describe.serial("portfolio flow", () => {
     await expect(a.getByText(/not financial advice/)).toBeVisible();
     await noHorizontalScroll(page);
     await page.getByRole("navigation").getByRole("button", { name: "Calendar" }).click();
-    await page.getByRole("navigation").getByRole("button", { name: "Ask AI" }).click();
+    await page.getByRole("navigation").getByRole("button", { name: "AI assistant" }).click();
     await expect(a.getByText("Most of your value is in MYR")).toBeVisible(); // kept when switching tabs
   });
 
@@ -242,6 +247,8 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText(/Backup created/)).toBeVisible();
     await dialog(page).getByRole("button", { name: "Close" }).click();
     await page.reload();
+    await expect(page.getByTestId("total-value")).toContainText("RM"); // opens on the Dashboard
+    await page.getByRole("navigation").getByRole("button", { name: "Portfolio" }).click();
     await expect(page.getByRole("button", { name: "1155.KL details" })).toBeVisible();
   });
 

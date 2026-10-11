@@ -13,7 +13,7 @@ import { Overview } from "./pages/Overview";
 
 const readTab = (): Tab => {
   const h = window.location.hash.replace("#/", "") as Tab;
-  return TABS.some((t) => t.id === h) ? h : "portfolio";
+  return TABS.some((t) => t.id === h) ? h : "dashboard";
 };
 
 export default function App() {
@@ -45,7 +45,7 @@ export default function App() {
   return (
     <PrivacyCtx.Provider value={{ hidden: !!hidden, toggle: () => setHidden((h) => !h) }}>
       <SheetCtx.Provider value={openSheet}>
-        <div className="safe-top mx-auto min-h-dvh max-w-[640px] px-3 pb-[calc(env(safe-area-inset-bottom)+92px)] sm:px-4">
+        <div className="safe-top mx-auto min-h-dvh max-w-[640px] px-4 pb-[calc(env(safe-area-inset-bottom)+84px)]">
           <main>
             {tab === "portfolio" && <Dashboard />}
             {tab === "dashboard" && <Overview />}

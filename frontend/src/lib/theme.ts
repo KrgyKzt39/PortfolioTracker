@@ -18,7 +18,7 @@ export function getThemePref(): ThemePref {
 export function applyTheme(pref: ThemePref = getThemePref()): boolean {
   const dark = pref === "dark" || (pref === "system" && media().matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#000000" : "#F2F4F8");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#000000" : "#F2F2F7");
   return dark;
 }
 
@@ -54,6 +54,6 @@ export function useTheme() {
 /** Chart colours for the current theme (SVG attributes can't read CSS variables). */
 export function chartColors(dark: boolean) {
   return dark
-    ? { grid: "#38383A", axis: "#6E6E73", line: "#4D8EFF", tipBg: "#2C2C2E", tipBorder: "#3A3A3C", tipText: "#F5F5F7", received: "#30D158", expected: "#FF9F0A", dotRing: "#1C1C1E" }
-    : { grid: "#E8ECF2", axis: "#94A3B8", line: "#1D4ED8", tipBg: "#FFFFFF", tipBorder: "#E8ECF2", tipText: "#0F172A", received: "#16A34A", expected: "#F59E0B", dotRing: "#FFFFFF" };
+    ? { grid: "#38383A", axis: "#8E8E93", line: "#0A84FF", up: "#30D158", down: "#FF453A", tipBg: "#2C2C2E", tipBorder: "#3A3A3C", tipText: "#FFFFFF", received: "#30D158", expected: "#FF9F0A", dotRing: "#1C1C1E" }
+    : { grid: "#E5E5EA", axis: "#8A8A8E", line: "#007AFF", up: "#34C759", down: "#FF3B30", tipBg: "#FFFFFF", tipBorder: "#E5E5EA", tipText: "#000000", received: "#34C759", expected: "#FF9500", dotRing: "#FFFFFF" };
 }

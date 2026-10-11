@@ -4,15 +4,15 @@ import { api } from "../lib/api";
 import { cn, money, priceStr } from "../lib/format";
 import { useCalendar, useDividendEvents, useInvalidateAll, useMeta, useOpenSheet, usePrivacy } from "../lib/hooks";
 import type { CalendarItem } from "../lib/types";
-import { Button, Card, Empty, ErrorBox, IconButton, Segmented, Spinner, useToast } from "../components/ui";
+import { Card, Empty, ErrorBox, IconButton, PageHeader, SectionTitle, Segmented, Spinner, useToast } from "../components/ui";
 import { TickerBadge } from "../components/TickerBadge";
 
 type Filter = "all" | "dividends" | "earnings";
 
 const KIND = {
-  ex_date: { label: "Ex-dividend", icon: BadgeDollarSign, cls: "bg-gold/15 text-gold" },
-  pay_date: { label: "Dividend paid", icon: Banknote, cls: "bg-up/15 text-up" },
-  earnings: { label: "Earnings", icon: FileBarChart, cls: "bg-accent/15 text-accent" },
+  ex_date: { label: "Ex-dividend", icon: BadgeDollarSign, cls: "bg-gold-soft text-gold" },
+  pay_date: { label: "Dividend paid", icon: Banknote, cls: "bg-up-soft text-up" },
+  earnings: { label: "Earnings", icon: FileBarChart, cls: "bg-accent-soft text-accent" },
 } as const;
 
 export function Calendar() {
@@ -20,6 +20,7 @@ export function Calendar() {
   const meta = useMeta();
   const open = useOpenSheet();
   const [filter, setFilter] = useState<Filter>("all");
+  const [adding, setAdding] = useState(false);
   if (cal.isLoading) return <Spinner label="Loading calendar" />;
   if (cal.error) return <ErrorBox error={cal.error} onRetry={() => cal.refetch()} />;
   const items = cal.data!.filter((i) => filter === "all" || (filter === "earnings" ? i.kind === "earnings" : i.kind !== "earnings"));
@@ -36,17 +37,39 @@ export function Calendar() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 px-1">
-        <h1 className="text-[28px] font-bold tracking-tight text-fg">Calendar</h1>
-        <div className="flex shrink-0 gap-1.5">
-          <Button variant="secondary" className="rounded-full px-3 py-1.5 text-[13px]" onClick={() => open({ kind: "earnings" })}>
-            <Plus className="h-3.5 w-3.5" /> Earnings
-          </Button>
-          <Button variant="secondary" className="rounded-full px-3 py-1.5 text-[13px]" onClick={() => open({ kind: "dividend" })}>
-            <Plus className="h-3.5 w-3.5" /> Dividend
-          </Button>
+      <PageHeader title="Calendar">
+        <div className="relative">
+          <IconButton label="Add a date" aria-expanded={adding} onClick={() => setAdding(!adding)}>
+            <Plus className="h-[24px] w-[24px]" strokeWidth={2} />
+          </IconButton>
+          {adding && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setAdding(false)} aria-hidden />
+              <div role="menu" className="absolute right-0 top-10 z-40 w-56 overflow-hidden rounded-[14px] bg-surface/95 shadow-[0_10px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl dark:bg-[#2C2C2E]/95">
+                {(
+                  [
+                    ["earnings", "Earnings date", FileBarChart],
+                    ["dividend", "Dividend date", BadgeDollarSign],
+                  ] as const
+                ).map(([kind, label, Icon], i) => (
+                  <button
+                    key={kind}
+                    role="menuitem"
+                    className={cn("flex w-full items-center justify-between px-4 py-3 text-left text-[17px] text-fg active:bg-fill/[0.12]", i === 0 && "hairline")}
+                    onClick={() => {
+                      setAdding(false);
+                      open({ kind });
+                    }}
+                  >
+                    {label}
+                    <Icon className="h-5 w-5 text-fg2" />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      </PageHeader>
       <Segmented
         label="Show"
         value={filter}
@@ -69,15 +92,14 @@ export function Calendar() {
         </Card>
       ) : (
         months.map((mo) => (
-          <Card key={mo.key}>
-            <p className="border-b border-line bg-ink-50 px-4 py-2 text-[13px] font-semibold text-fg2">
-              {new Date(`${mo.key}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
-            </p>
+          <section key={mo.key}>
+            <SectionTitle>{new Date(`${mo.key}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</SectionTitle>
+          <Card>
             <ul>
-              {mo.days.map((day) => (
-                <li key={day.date} className="flex gap-3 border-b border-line px-4 py-3 last:border-b-0">
+              {mo.days.map((day, di) => (
+                <li key={day.date} className="flex gap-3 pl-4">
                   <DateBlock iso={day.date} />
-                  <ul className="min-w-0 flex-1 space-y-2">
+                  <ul className={cn("min-w-0 flex-1 space-y-2.5 py-3 pr-3", di < mo.days.length - 1 && "hairline")}>
                     {day.items.map((it, i) => (
                       <Entry key={`${it.kind}-${it.symbol}-${i}`} it={it} />
                     ))}
@@ -86,9 +108,10 @@ export function Calendar() {
               ))}
             </ul>
           </Card>
+          </section>
         ))
       )}
-      <p className="px-2 pb-4 text-2xs leading-relaxed text-faint">Shows stocks you hold, for the next 4 months. Dividend amounts are estimates for your current quantity after tax.</p>
+      <p className="px-1 pb-4 text-[13px] leading-relaxed text-muted">Shows stocks you hold, for the next 4 months. Dividend amounts are estimates for your current quantity after tax.</p>
     </div>
   );
 }
@@ -96,9 +119,9 @@ export function Calendar() {
 function DateBlock({ iso }: { iso: string }) {
   const d = new Date(`${iso}T00:00:00`);
   return (
-    <div className="w-11 shrink-0 text-center">
-      <p className="text-[10px] font-semibold uppercase text-faint">{d.toLocaleDateString("en-GB", { weekday: "short" })}</p>
-      <p className="tabular text-[20px] font-semibold leading-tight text-fg">{d.getDate()}</p>
+    <div className="w-10 shrink-0 pt-3 text-center">
+      <p className="text-[11px] font-semibold uppercase text-down">{d.toLocaleDateString("en-GB", { weekday: "short" })}</p>
+      <p className="tabular text-[22px] font-normal leading-tight text-fg">{d.getDate()}</p>
     </div>
   );
 }
@@ -113,7 +136,7 @@ function Entry({ it }: { it: CalendarItem }) {
   const Icon = k.icon;
   let detail = "";
   if (it.kind === "earnings") detail = it.session === "before" ? "Before market opens" : it.session === "after" ? "After market closes" : "Time not announced";
-  else detail = `${priceStr(it.amount_per_share ?? null, it.currency ?? "")}/share · you get about ${money(it.expected_net ?? null, it.currency ?? "", { hidden })}`;
+  else detail = `${priceStr(it.amount_per_share ?? null, it.currency ?? "")}/share · ≈ ${money(it.expected_net ?? null, it.currency ?? "", { hidden })} for you`;
 
   const edit = () => {
     if (it.kind === "earnings") return;
@@ -131,15 +154,15 @@ function Entry({ it }: { it: CalendarItem }) {
   };
   return (
     <li className="flex items-center gap-3">
-      <TickerBadge symbol={it.symbol} className="h-[28px] w-[44px]" />
+      <TickerBadge symbol={it.symbol} />
       <button className="min-w-0 flex-1 text-left" onClick={edit} disabled={it.kind === "earnings"}>
         <span className="flex items-center gap-2">
-          <span className="text-[14px] font-bold text-fg">{it.symbol}</span>
-          <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold", k.cls)}>
+          <span className="text-[17px] font-semibold text-fg">{it.symbol}</span>
+          <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px] font-semibold", k.cls)}>
             <Icon className="h-3 w-3" aria-hidden /> {k.label}
           </span>
         </span>
-        <span className="block truncate text-2xs text-muted">{detail}</span>
+        <span className="block truncate text-[13px] text-muted">{detail}</span>
       </button>
       {it.kind === "earnings" && it.source === "manual" && (
         <IconButton label={`Remove ${it.symbol} earnings date`} className="h-8 w-8 text-faint" onClick={removeEarnings}>

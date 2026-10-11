@@ -9,15 +9,16 @@ function hash(s: string) {
   return h;
 }
 
+/** Round symbol badge, like an app icon in a list. The full symbol is printed beside it. */
 export function TickerBadge({ symbol, className }: { symbol: string; className?: string }) {
   const p = `tk-${hash(symbol) % PALETTES}`;
-  const label = symbol.replace(/\.[A-Z]{1,3}$/, "").slice(0, 5); // the full symbol is printed beside it
+  const label = symbol.replace(/\.[A-Z]{1,3}$/, "").replace(/-.*$/, "").slice(0, 4);
   return (
     <div
       aria-hidden
       className={cn(
-        "flex h-[30px] w-[50px] shrink-0 items-center justify-center rounded-[9px] font-bold tracking-tight",
-        label.length > 4 ? "text-[9px]" : "text-[10px]",
+        "flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full font-semibold tracking-[-0.02em]",
+        label.length > 3 ? "text-[10.5px]" : "text-[12px]",
         p,
         className,
       )}

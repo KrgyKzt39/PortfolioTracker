@@ -19,12 +19,13 @@ export function FormError({ error }: { error: string | null | undefined }) {
 
 export function Section({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[13px] font-semibold text-muted">{title}</h3>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between px-4">
+        <h3 className="text-[13px] uppercase tracking-[0.02em] text-muted">{title}</h3>
         {action}
       </div>
-      {children}
+      {/* iOS grouped card; inputs inside use the grey field colour so they stay visible on white */}
+      <div className="space-y-3 rounded-[12px] bg-surface px-4 py-3 [--field:var(--ink-field)]">{children}</div>
     </div>
   );
 }

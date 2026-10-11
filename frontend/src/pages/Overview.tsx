@@ -6,7 +6,8 @@ import { chartColors, useTheme } from "../lib/theme";
 import { cn, money, pct, shortDate, tone } from "../lib/format";
 import { usePortfolio, usePrivacy, useSettings } from "../lib/hooks";
 import type { Portfolio } from "../lib/types";
-import { Card, Empty, ErrorBox, Segmented, Spinner } from "../components/ui";
+import { Card, Empty, ErrorBox, PageHeader, SectionTitle, Segmented, Spinner } from "../components/ui";
+import { RefreshAndSettings, Summary } from "../components/Summary";
 
 type Range = "1M" | "3M" | "6M" | "1Y" | "All";
 const DAYS: Record<Range, number> = { "1M": 31, "3M": 92, "6M": 183, "1Y": 366, All: 100000 };
@@ -24,8 +25,13 @@ export function Overview() {
   if (pf.isLoading || settings.isLoading) return <Spinner label="Loading" />;
   if (pf.error) return <ErrorBox error={pf.error} onRetry={() => pf.refetch()} />;
   return (
-    <div className="space-y-4">
-      <h1 className="px-1 text-[28px] font-bold tracking-tight text-fg">Dashboard</h1>
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <PageHeader title="Dashboard">
+          <RefreshAndSettings data={pf.data!} />
+        </PageHeader>
+        <Summary data={pf.data!} />
+      </div>
       <ValueChart data={pf.data!} history={history.data ?? []} loading={history.isLoading} />
       <Breakdown data={pf.data!} />
     </div>
@@ -46,15 +52,21 @@ function ValueChart({ data, history, loading }: { data: Portfolio; history: { da
   const change = first !== undefined && last !== undefined ? last - first : null;
   const changePct = change !== null && first ? (change / first) * 100 : null;
 
+  const line = change !== null && change < 0 ? cc.down : cc.up;
   return (
+    <section>
+      <SectionTitle>Value over time</SectionTitle>
     <Card>
-      <div className="px-5 pb-2 pt-4">
-        <h2 className="text-[15px] font-semibold text-fg">Value over time</h2>
-        <p className="tabular mt-1 text-[24px] font-bold tracking-tight text-fg">{money(data.totals.value, base, { hidden })}</p>
-        {change !== null && points.length > 1 && (
-          <p className={cn("tabular text-sm font-semibold", tone(change))}>
-            {money(change, base, { signed: true, hidden })} ({pct(changePct, { signed: true })}) since {shortDate(points[0].date)}
+      <div className="px-4 pb-3 pt-3.5">
+        {change !== null && points.length > 1 ? (
+          <p className="tabular text-[15px] text-muted">
+            <span className={cn("font-semibold", tone(change))}>
+              {money(change, base, { signed: true, hidden })} ({pct(changePct, { signed: true })})
+            </span>{" "}
+            since {shortDate(points[0].date)}
           </p>
+        ) : (
+          <p className="text-[15px] text-muted">One point is saved each day.</p>
         )}
       </div>
       <div className="px-4 pb-2">
@@ -70,8 +82,8 @@ function ValueChart({ data, history, loading }: { data: Portfolio; history: { da
             <AreaChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={cc.line} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={cc.line} stopOpacity={0} />
+                  <stop offset="0%" stopColor={line} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={line} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke={cc.grid} />
@@ -98,12 +110,13 @@ function ValueChart({ data, history, loading }: { data: Portfolio; history: { da
                 labelFormatter={(d) => shortDate(String(d))}
                 formatter={(v) => [money(Number(v), base, { hidden }), "Value"]}
               />
-              <Area type="monotone" dataKey="value" stroke={cc.line} strokeWidth={2} fill="url(#valueFill)" isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: cc.dotRing }} />
+              <Area type="monotone" dataKey="value" stroke={line} strokeWidth={2} fill="url(#valueFill)" isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: cc.dotRing }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
     </Card>
+    </section>
   );
 }
 
@@ -131,11 +144,10 @@ function Breakdown({ data }: { data: Portfolio }) {
   const max = rows[0]?.value ?? 0;
 
   return (
+    <section>
+      <SectionTitle>Where your money is</SectionTitle>
     <Card>
-      <div className="px-5 pb-2 pt-4">
-        <h2 className="text-[15px] font-semibold text-fg">Where your money is</h2>
-      </div>
-      <div className="px-4 pb-3">
+      <div className="px-4 pb-3 pt-3.5">
         <Segmented
           label="Group by"
           value={by}
@@ -150,23 +162,24 @@ function Breakdown({ data }: { data: Portfolio }) {
       {rows.length === 0 ? (
         <Empty title="Nothing priced yet">Add holdings and prices to see the split.</Empty>
       ) : (
-        <ul className="space-y-3 px-5 pb-5">
+        <ul className="space-y-3.5 px-4 pb-4">
           {rows.map((r) => (
             <li key={r.label}>
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="truncate font-semibold text-fg">{r.label}</span>
+              <div className="flex items-baseline justify-between gap-3 text-[15px]">
+                <span className="truncate text-fg">{r.label}</span>
                 <span className="tabular shrink-0 text-muted">
-                  <span className="font-semibold text-fg">{pct(r.share, { dp: 1 })}</span> · {money(r.value, base, { hidden })}
+                  {money(r.value, base, { hidden })} <span className="ml-1 font-semibold text-fg">{pct(r.share, { dp: 1 })}</span>
                 </span>
               </div>
-              <div className="mt-1.5 h-2 rounded-full bg-ink-100" aria-hidden>
-                <div className="h-2 rounded-full bg-accent" style={{ width: `${max ? Math.max(2, (r.value / max) * 100) : 0}%` }} />
+              <div className="mt-1.5 h-1.5 rounded-full bg-fill/[0.12]" aria-hidden>
+                <div className="h-1.5 rounded-full bg-accent" style={{ width: `${max ? Math.max(2, (r.value / max) * 100) : 0}%` }} />
               </div>
             </li>
           ))}
         </ul>
       )}
-      {data.totals.incomplete && <p className="px-5 pb-4 text-2xs text-faint">Holdings without a price are left out.</p>}
+      {data.totals.incomplete && <p className="px-4 pb-4 text-[13px] text-muted">Holdings without a price are left out.</p>}
     </Card>
+    </section>
   );
 }

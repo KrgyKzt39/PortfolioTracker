@@ -5,26 +5,32 @@
 :root {
   color-scheme: light;
   -webkit-text-size-adjust: 100%;
-  --page: 242 244 248;
+  /* iOS system colours (light). Text greens/reds use Apple's accessible variants. */
+  --page: 242 242 247;
   --surface: 255 255 255;
-  --ink-50: 247 248 251;
-  --ink-100: 238 241 246;
-  --ink-600: 225 230 238;
-  --ink-field: 243 245 249;
-  --line: 232 236 242;
-  --fg: 15 23 42;
-  --fg2: 51 65 85;
-  --muted: 100 116 139;
-  --faint: 148 163 184;
-  --up: 21 128 61;
-  --up-soft: 227 246 233;
-  --down: 220 38 38;
-  --down-soft: 254 236 236;
-  --gold: 180 83 9;
-  --gold-soft: 253 243 220;
-  --accent: 29 78 216;
-  --accent-soft: 231 238 253;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
+  --sheet: 242 242 247;
+  --field: 255 255 255;
+  --ink-50: 248 248 250;
+  --ink-100: 238 238 240;
+  --ink-600: 209 209 214;
+  --ink-field: 238 238 240;
+  --fill: 118 118 128;
+  --line: 198 198 200;
+  --fg: 0 0 0;
+  --fg2: 60 60 67;
+  --muted: 138 138 142;
+  --faint: 174 174 178;
+  --up: 36 138 61;
+  --up-soft: 228 246 233;
+  --up-strong: 52 199 89;
+  --down: 215 0 21;
+  --down-soft: 255 233 232;
+  --down-strong: 255 59 48;
+  --gold: 178 80 0;
+  --gold-soft: 255 241 224;
+  --accent: 0 122 255;
+  --accent-soft: 229 241 255;
+  --shadow-card: none;
 }
 
 /* Dark: Apple's system dark palette (black page, #1C1C1E grouped cards). */
@@ -32,23 +38,28 @@
   color-scheme: dark;
   --page: 0 0 0;
   --surface: 28 28 30;
-  --ink-50: 36 36 39;
+  --sheet: 28 28 30;
+  --field: 44 44 46;
+  --ink-50: 36 36 38;
   --ink-100: 44 44 46;
-  --ink-600: 58 58 60;
+  --ink-600: 72 72 74;
   --ink-field: 44 44 46;
+  --fill: 118 118 128;
   --line: 56 56 58;
-  --fg: 245 245 247;
-  --fg2: 209 209 214;
-  --muted: 152 152 159;
-  --faint: 110 110 115;
+  --fg: 255 255 255;
+  --fg2: 235 235 245;
+  --muted: 142 142 147;
+  --faint: 99 99 102;
   --up: 48 209 88;
   --up-soft: 18 52 30;
-  --down: 255 105 97;
+  --up-strong: 48 209 88;
+  --down: 255 69 58;
   --down-soft: 62 22 20;
-  --gold: 255 179 64;
+  --down-strong: 255 69 58;
+  --gold: 255 159 10;
   --gold-soft: 60 42 12;
-  --accent: 77 142 255;
-  --accent-soft: 24 40 74;
+  --accent: 10 132 255;
+  --accent-soft: 16 40 74;
   --shadow-card: none;
 }
 
@@ -70,6 +81,13 @@ body {
 
 h1, h2, h3 {
   letter-spacing: -0.02em;
+}
+
+/* iOS hairline separators */
+.hairline {
+  border-color: rgb(var(--line) / 0.75);
+  border-width: 0;
+  border-bottom-width: 0.5px;
 }
 
 .tabular {

@@ -1,22 +1,13 @@
-import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, Eye, EyeOff, GripVertical, Pencil, Plus, RefreshCw, Settings as Gear, Upload } from "lucide-react";
-import { api } from "../lib/api";
-import { CURRENCY_LIST, cn, money, pct, priceStr, qty, shortDate, tone } from "../lib/format";
-import { useOpenSheet, usePortfolio, usePrivacy, useRefreshStatus, useSaveSettings, useSettings } from "../lib/hooks";
-import type { CategoryCard, Holding, Portfolio, PriceStatus, RefreshState } from "../lib/types";
-import { Badge, Button, Card, Empty, ErrorBox, IconButton, Spinner, useToast } from "../components/ui";
+import { useState } from "react";
+import { AlertTriangle, ArrowUpDown, ChevronDown, ChevronRight, Pencil, Plus, Upload } from "lucide-react";
+import { cn, money, pct, priceStr, qty, shortDate, tone } from "../lib/format";
+import { useOpenSheet, usePortfolio, usePrivacy, useSettings } from "../lib/hooks";
+import type { CategoryCard, Holding, PriceStatus } from "../lib/types";
+import { Button, Card, Empty, ErrorBox, IconButton, PageHeader, Spinner } from "../components/ui";
 import { TickerBadge } from "../components/TickerBadge";
 import { Arrange } from "../components/Arrange";
+import { RefreshAndSettings } from "../components/Summary";
 
-const STATUS_STYLE: Record<PriceStatus, string> = {
-  Live: "bg-up-soft text-up",
-  Delayed: "bg-gold-soft text-gold",
-  Cached: "bg-ink-100 text-fg2",
-  Manual: "bg-accent-soft text-accent",
-  Unavailable: "bg-down-soft text-down",
-  Partial: "bg-gold-soft text-gold",
-};
 const PRICE_WORD: Record<PriceStatus, string> = {
   Live: "Live",
   Delayed: "Delayed",
@@ -25,30 +16,48 @@ const PRICE_WORD: Record<PriceStatus, string> = {
   Unavailable: "No price yet",
   Partial: "Partial",
 };
-const STATUS_HELP: Record<PriceStatus, string> = {
-  Live: "Real-time quotes from the provider",
-  Delayed: "Provider quotes, typically 15+ minutes delayed",
-  Cached: "Last known good prices; latest refresh is older than the freshness window or failed",
-  Manual: "Prices entered by you",
-  Unavailable: "No prices yet. Add a manual price or enable a provider in Settings",
-  Partial: "Some holdings have no price and are excluded from totals",
-};
 
+/** The Portfolio tab: holdings grouped by the user's categories. */
 export function Dashboard() {
   const settings = useSettings();
   const base = settings.data?.base_currency;
   const pf = usePortfolio(base);
   const open = useOpenSheet();
+  const { hidden } = usePrivacy();
   const [arranging, setArranging] = useState(false);
 
   if (pf.isLoading || settings.isLoading) return <Spinner label="Loading portfolio" />;
   if (pf.error) return <ErrorBox error={pf.error} onRetry={() => pf.refetch()} />;
   const data = pf.data!;
   const empty = data.categories.every((c) => c.holdings.length === 0);
+  const t = data.totals;
 
   return (
-    <div className="space-y-4">
-      <Hero data={data} />
+    <div className="space-y-5">
+      <div>
+        <PageHeader title="Portfolio">
+          <IconButton label="Add" onClick={() => open({ kind: "holding" })}>
+            <Plus className="h-[24px] w-[24px]" strokeWidth={2} />
+          </IconButton>
+          <IconButton label="Upload" onClick={() => open({ kind: "import" })}>
+            <Upload className="h-[21px] w-[21px]" strokeWidth={2} />
+          </IconButton>
+          {!empty && (
+            <IconButton label="Arrange" onClick={() => setArranging(!arranging)} className={arranging ? "bg-accent-soft" : undefined}>
+              <ArrowUpDown className="h-[21px] w-[21px]" strokeWidth={2} />
+            </IconButton>
+          )}
+          <RefreshAndSettings data={data} />
+        </PageHeader>
+        {!empty && (
+          <p className="tabular px-1 pt-0.5 text-[15px] text-muted">
+            <span className="font-semibold text-fg" data-testid="total-value">{money(t.value, data.base_currency, { hidden })}</span>{" "}
+            <span className={tone(t.pl)}>
+              {money(t.pl, data.base_currency, { signed: true, hidden })} ({pct(t.pl_pct, { signed: true })})
+            </span>
+          </p>
+        )}
+      </div>
       {data.warnings.length > 0 && <Warnings items={data.warnings} />}
       {empty ? (
         <Card>
@@ -67,157 +76,25 @@ export function Dashboard() {
       ) : arranging ? (
         <Arrange data={data} onDone={() => setArranging(false)} />
       ) : (
-        <>
-          <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={() => open({ kind: "holding" })}>
-              <Plus className="h-4 w-4" /> Add
-            </Button>
-            <Button variant="secondary" className="flex-1" onClick={() => open({ kind: "import" })}>
-              <Upload className="h-4 w-4" /> Upload
-            </Button>
-            <Button variant="secondary" className="flex-1" onClick={() => setArranging(true)}>
-              <GripVertical className="h-4 w-4" /> Arrange
-            </Button>
-          </div>
-          {data.categories.map((c) => (
-            <CategoryCardView key={c.id ?? "none"} card={c} base={data.base_currency} />
-          ))}
-        </>
+        data.categories.map((c) => <CategorySection key={c.id ?? "none"} card={c} base={data.base_currency} />)
       )}
     </div>
   );
 }
 
-function Hero({ data }: { data: Portfolio }) {
-  const { hidden, toggle } = usePrivacy();
-  const open = useOpenSheet();
-  const save = useSaveSettings();
-  const toast = useToast();
-  const qc = useQueryClient();
-  const [waiting, setWaiting] = useState(false);
-  const status = useRefreshStatus(waiting);
-  const t = data.totals;
-  const base = data.base_currency;
-
-  useEffect(() => {
-    const s: RefreshState | undefined = status.data;
-    if (waiting && s && !s.running && s.finished_at) {
-      setWaiting(false);
-      qc.invalidateQueries();
-      const errs = Object.keys(s.errors).length;
-      toast(s.message + (errs ? ` · ${Object.entries(s.errors).slice(0, 2).map(([k, v]) => `${k}: ${v}`).join("; ")}` : ""), errs ? "error" : "success");
-    }
-  }, [status.data, waiting, qc, toast]);
-
-  const refresh = async () => {
-    try {
-      await api<RefreshState>("/refresh", { method: "POST" });
-      setWaiting(true);
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  };
-  const refreshing = waiting || data.refresh.running;
-  const fx = data.fx.filter((f) => f.rate !== null || ["USD", "SGD", "GBP", "HKD", "MYR"].includes(f.from));
-
-  return (
-    <section
-      aria-label="Portfolio summary"
-      className="relative overflow-hidden rounded-[20px] bg-surface px-5 pb-4 pt-5 shadow-card"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="whitespace-nowrap text-[15px] font-medium text-muted">Total portfolio value</h1>
-        <div className="flex items-center gap-1.5">
-          {data.demo && <Badge className="bg-gold-soft text-gold">DEMO</Badge>}
-          <span title={STATUS_HELP[data.price_status]} className={cn("rounded-full px-2.5 py-1 text-[12px] font-semibold", STATUS_STYLE[data.price_status])} data-testid="price-status">
-            {refreshing ? "Updating…" : data.price_status}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-1 flex items-center gap-2">
-        <p className="tabular text-[34px] font-bold leading-tight tracking-tight text-fg" data-testid="total-value">
-          {money(t.value, base, { hidden })}
-        </p>
-        <IconButton label={hidden ? "Show values" : "Hide values"} onClick={toggle} className="text-faint">
-          {hidden ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-        </IconButton>
-      </div>
-
-      <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[16px] font-semibold", tone(t.pl))}>
-        <span>{money(t.pl, base, { signed: true, hidden })}</span>
-        <span>{pct(t.pl_pct, { signed: true })}</span>
-      </p>
-      <p className="tabular mt-2 text-[11.5px] leading-snug text-muted">
-        {chunk(fx, 2).map((row, i) => (
-          <span key={i} className="block">
-            {row.map((f) => `${f.from}→${f.to}: ${f.rate === null ? "N/A" : fxStr(f.rate)}`).join(" · ")}
-          </span>
-        ))}
-      </p>
-
-      <p className="mt-1 text-[11.5px] text-muted">Prices as of {shortStamp(data.prices_as_of ?? data.generated_at)}</p>
-
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
-        <div className="flex items-center gap-1">
-          <label className="sr-only" htmlFor="base-ccy">
-            Base currency
-          </label>
-          <select
-            id="base-ccy"
-            value={base}
-            onChange={(e) => save.mutate({ base_currency: e.target.value as Portfolio["base_currency"] })}
-            className="h-8 w-[78px] appearance-none rounded-full bg-ink-100 pl-2.5 pr-5 text-[12px] font-semibold text-fg focus:outline-none focus:ring-1 focus:ring-accent"
-            style={{ backgroundPosition: "right 0.4rem center" }}
-          >
-            {CURRENCY_LIST.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code}
-              </option>
-            ))}
-          </select>
-          <IconButton label="Settings" onClick={() => open({ kind: "settings" })} className="h-8 w-8 text-muted">
-            <Gear className="h-[18px] w-[18px]" />
-          </IconButton>
-        </div>
-        <div className="flex items-center">
-          <Button variant="pill" onClick={refresh} loading={refreshing} className="px-3.5 py-1.5">
-            {!refreshing && <RefreshCw className="h-4 w-4" />} Refresh
-          </Button>
-        </div>
-      </div>
-      {t.incomplete && <p className="mt-2 text-2xs text-gold/90">Totals exclude holdings without a price or FX rate.</p>}
-    </section>
-  );
-}
-
-function shortStamp(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
-}
-
-function fxStr(r: string) {
-  const n = Number(r);
-  return n < 1 ? n.toFixed(3) : n.toFixed(2);
-}
-
-function chunk<T>(arr: T[], n: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-  return out;
-}
-
 function Warnings({ items }: { items: string[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-2xl bg-gold-soft px-4 py-2.5 text-xs text-gold">
+    <div className="rounded-[14px] bg-gold-soft px-4 py-3 text-[15px] text-gold">
       <button className="flex w-full items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="flex-1">{items.length} data warning{items.length > 1 ? "s" : ""}</span>
+        <span className="flex-1">
+          {items.length} data warning{items.length > 1 ? "s" : ""}
+        </span>
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <ul className="mt-2 list-disc space-y-0.5 pl-6 text-gold/80">
+        <ul className="mt-2 list-disc space-y-0.5 pl-6 text-[13px]">
           {items.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -227,164 +104,146 @@ function Warnings({ items }: { items: string[] }) {
   );
 }
 
-function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string }) {
+function CategorySection({ card: c, base }: { card: CategoryCard; base: string }) {
   const { hidden } = usePrivacy();
   const open = useOpenSheet();
   const [expanded, setExpanded] = useState<number | null>(null);
-  const isDiv = c.show_dividends;
-  const cols = isDiv ? ["Stocks", "P/L (%)", "Gain / DV", "Live / Avg"] : ["Stocks", "P/L (%)", "Live / Avg", "Value"];
   if (c.holdings.length === 0 && c.id === null) return null;
 
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-3 px-4 pb-3.5 pt-4">
-        <div className="min-w-0 flex-1">
+    <section aria-label={c.name}>
+      <div className="flex items-end justify-between gap-3 px-1 pb-2">
+        <div className="min-w-0">
           <div className="flex items-center gap-1">
-            <h2 className="truncate text-[15px] font-semibold text-fg2">{c.name}</h2>
+            <h2 className="truncate text-[20px] font-semibold tracking-[-0.02em] text-fg">{c.name}</h2>
             {c.id !== null && (
-              <IconButton label={`Edit ${c.name}`} className="h-7 w-7 text-faint" onClick={() => open({ kind: "category", category: { id: c.id!, name: c.name, show_dividends: c.show_dividends, sort_order: c.sort_order } })}>
+              <IconButton
+                label={`Edit ${c.name}`}
+                className="h-7 w-7 text-muted"
+                onClick={() => open({ kind: "category", category: { id: c.id!, name: c.name, show_dividends: c.show_dividends, sort_order: c.sort_order } })}
+              >
                 <Pencil className="h-3.5 w-3.5" />
               </IconButton>
             )}
           </div>
-          <p className="tabular truncate text-[22px] font-bold leading-tight tracking-tight text-fg">{money(c.value, base, { hidden })}</p>
-          <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[14px] font-semibold", tone(c.pl))}>
-            <span>{money(c.pl, base, { signed: true, hidden })}</span>
-            <span>{pct(c.pl_pct, { signed: true })}</span>
+          <p className={cn("tabular text-[13px]", tone(c.pl))}>
+            {money(c.pl, base, { signed: true, hidden })} ({pct(c.pl_pct, { signed: true })})
           </p>
         </div>
-        {isDiv && (
-          <div className="shrink-0 text-right">
-            <p className="text-[12px] text-muted">Est. yearly dividend</p>
-            <p className="tabular whitespace-nowrap text-[17px] font-bold leading-tight text-gold">{money(c.est_annual_dividend, base, { hidden })}</p>
-            <p className="tabular text-[13px] font-semibold text-gold/90">{pct(c.dividend_yield)}</p>
-          </div>
-        )}
+        <div className="shrink-0 text-right">
+          <p className="tabular text-[17px] font-semibold text-fg">{money(c.value, base, { hidden })}</p>
+          {c.show_dividends && (
+            <p className="tabular text-[13px] text-gold" title="Expected yearly dividend after tax">
+              {money(c.est_annual_dividend, base, { hidden, compact: true })}/yr · {pct(c.dividend_yield)}
+            </p>
+          )}
+        </div>
       </div>
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.08fr)_minmax(0,1.08fr)_minmax(0,1.04fr)] gap-1.5 whitespace-nowrap border-y border-line bg-ink-50 px-2.5 py-2 text-[10px] font-medium text-faint" role="row">
-        {cols.map((col, i) => (
-          <span key={col} className={i === 0 ? "pl-[42px] text-left" : "text-center"} role="columnheader">
-            {col}
-          </span>
-        ))}
-      </div>
-      {c.holdings.length === 0 && <Empty title="No stocks here yet">Use Arrange to move stocks into this category.</Empty>}
-      <ul>
-        {c.holdings.map((h) => (
-          <HoldingRow key={h.instrument_id} h={h} isDiv={isDiv} hidden={hidden} base={base} expanded={expanded === h.instrument_id} onToggle={() => setExpanded(expanded === h.instrument_id ? null : h.instrument_id)} />
-        ))}
-      </ul>
-      {c.incomplete && <p className="border-t border-line px-5 py-2 text-2xs text-gold/80">Stocks without a price are left out of this total.</p>}
-    </Card>
+      <Card>
+        {c.holdings.length === 0 && <Empty title="No stocks here yet">Use Arrange to move stocks into this category.</Empty>}
+        <ul>
+          {c.holdings.map((h, i) => (
+            <HoldingRow
+              key={h.instrument_id}
+              h={h}
+              last={i === c.holdings.length - 1}
+              hidden={hidden}
+              base={base}
+              expanded={expanded === h.instrument_id}
+              onToggle={() => setExpanded(expanded === h.instrument_id ? null : h.instrument_id)}
+            />
+          ))}
+        </ul>
+      </Card>
+      {c.incomplete && <p className="px-1 pt-1.5 text-[13px] text-muted">Stocks without a price are left out of this total.</p>}
+    </section>
   );
 }
 
-function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding; isDiv: boolean; hidden: boolean; base: string; expanded: boolean; onToggle: () => void }) {
+/** Stocks-app style row: symbol and position on the left, value and return pill on the right. */
+function HoldingRow({ h, last, hidden, base, expanded, onToggle }: { h: Holding; last: boolean; hidden: boolean; base: string; expanded: boolean; onToggle: () => void }) {
   const ccy = h.currency;
-  const unit = h.kind === "fund" ? (Number(h.price) === 1 ? "" : "units") : "shares";
+  const isBalance = h.kind === "fund" && Number(h.price) === 1;
+  const position = isBalance ? (h.name ?? "Balance") : `${qty(h.quantity)} ${h.kind === "fund" ? "units" : "shares"}`;
+  const n = h.pl_pct === null ? null : Number(h.pl_pct);
+  const pill = n === null ? "bg-fill/[0.16] text-muted" : n > 0 ? "bg-up-strong text-white" : n < 0 ? "bg-down-strong text-white" : "bg-fill/[0.3] text-white";
   return (
-    <li className="border-b border-line last:border-b-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        aria-label={`${h.symbol} details`}
-        className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1.08fr)_minmax(0,1.08fr)_minmax(0,1.04fr)] items-center gap-1.5 whitespace-nowrap px-2.5 py-3 text-left transition-colors hover:bg-ink-50"
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <TickerBadge symbol={h.symbol} className="h-[30px] w-[36px]" />
-          <span className="min-w-0">
-            <span className="block truncate text-[13.5px] font-bold text-fg">{h.symbol}</span>
-            <span className="tabular block truncate text-[10.5px] text-muted">
-              {unit ? `${qty(h.quantity)} ${unit}` : money(h.quantity, ccy, { hidden, compact: true })}
+    <li>
+      <button type="button" onClick={onToggle} aria-expanded={expanded} aria-label={`${h.symbol} details`} className="flex w-full items-center gap-3 pl-4 text-left active:bg-fill/[0.08]">
+        <TickerBadge symbol={h.symbol} />
+        <span className={cn("flex min-w-0 flex-1 items-center gap-3 py-[11px] pr-4", !(last && !expanded) && "hairline")}>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[17px] font-semibold leading-snug text-fg">{h.symbol}</span>
+            <span className="tabular block truncate text-[13px] text-muted">
+              {position}
             </span>
           </span>
+          <span className="flex shrink-0 flex-col items-end gap-1">
+            <span className="tabular text-[17px] leading-snug text-fg">
+              {money(h.market_value, ccy, { hidden })}
+              {(h.price_status === "Cached" || h.price_status === "Unavailable") && <span className="ml-0.5 align-super text-[10px] text-gold" title={PRICE_WORD[h.price_status]}>•</span>}
+            </span>
+            <span className={cn("tabular min-w-[68px] rounded-[6px] px-1.5 py-[1px] text-right text-[13px] font-semibold", pill)}>{pct(h.pl_pct, { signed: true })}</span>
+          </span>
         </span>
-        <span className="tabular text-center">
-          <span className={cn("block text-[11.5px] font-bold", tone(h.total_pl))}>{money(h.total_pl, ccy, { signed: true, hidden, compact: true })}</span>
-          <span className={cn("block text-[10.5px] font-semibold", tone(h.total_pl))}>{pct(h.pl_pct, { signed: true })}</span>
-        </span>
-        {isDiv ? (
-          <>
-            <span className="tabular text-center">
-              <span className={cn("block text-[11.5px] font-bold", tone(h.gain))}>{money(h.gain, ccy, { signed: true, hidden, compact: true })}</span>
-              <span className="block text-[10.5px] font-semibold text-up">{money(h.dividends_net, ccy, { signed: true, hidden, compact: true })}</span>
-            </span>
-            <span className="tabular text-center">
-              <PriceCell h={h} />
-              <span className="block text-[10.5px] text-muted">{h.kind === "fund" && h.dividend_yield ? `${pct(h.dividend_yield)} yield` : priceStr(h.avg_cost, ccy)}</span>
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="tabular text-center">
-              <PriceCell h={h} />
-              <span className="block text-[10.5px] text-muted">{priceStr(h.avg_cost, ccy)}</span>
-            </span>
-            <span className="tabular text-center text-[11.5px] font-bold text-fg">{money(h.market_value, ccy, { hidden, compact: true })}</span>
-          </>
-        )}
       </button>
-      {expanded && <HoldingDetail h={h} base={base} hidden={hidden} />}
+      {expanded && <HoldingDetail h={h} base={base} hidden={hidden} last={last} />}
     </li>
   );
 }
 
-function PriceCell({ h }: { h: Holding }) {
-  return (
-    <span className="block text-[11.5px] font-bold text-fg" title={`${PRICE_WORD[h.price_status]}${h.price_source ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${h.price_date}` : ""}`}>
-      {priceStr(h.price, h.currency)}
-      {(h.price_status === "Cached" || h.price_status === "Unavailable") && <span className="ml-0.5 align-super text-[9px] text-gold">•</span>}
-    </span>
-  );
-}
-
-function HoldingDetail({ h, base, hidden }: { h: Holding; base: string; hidden: boolean }) {
+function HoldingDetail({ h, base, hidden, last }: { h: Holding; base: string; hidden: boolean; last: boolean }) {
   const open = useOpenSheet();
   const c = h.currency;
   const m = (v: string | null, signed = false, ccy = c) => money(v, ccy, { signed, hidden });
   const rows: [string, string, string?][] = [
+    ["Price", `${priceStr(h.price, c)} · avg ${priceStr(h.avg_cost, c)}`],
     ["Value", m(h.market_value)],
-    ["Cost", `${m(h.cost)} · avg ${priceStr(h.avg_cost, c)}`],
+    ["Cost", m(h.cost)],
     ["Gain / loss", m(h.gain, true), tone(h.gain)],
   ];
   if (Number(h.dividends_net) !== 0) rows.push(["Dividends received", m(h.dividends_net, true), "text-up"]);
-  if (h.est_annual_dividend_net) rows.push(["Expected yearly dividend", `${m(h.est_annual_dividend_net)} · ${pct(h.dividend_yield)} yield`, "text-gold"]);
+  rows.push(["Total return", `${m(h.total_pl, true)} (${pct(h.pl_pct, { signed: true })})`, tone(h.total_pl)]);
+  if (h.est_annual_dividend_net) rows.push(["Expected yearly dividend", `${m(h.est_annual_dividend_net)} · ${pct(h.dividend_yield)}`, "text-gold"]);
   if (c !== base) rows.push([`Value in ${base}`, m(h.market_value_base, false, base)]);
-  rows.push(["Price", `${PRICE_WORD[h.price_status]}${h.price_source && h.price_source !== "manual" ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${shortDate(h.price_date)}` : ""}`]);
+  rows.push(["Price source", `${PRICE_WORD[h.price_status]}${h.price_source && h.price_source !== "manual" ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${shortDate(h.price_date)}` : ""}`]);
   return (
-    <div className="bg-ink-50 px-4 pb-4 pt-1">
-      {h.name && <p className="pb-2 text-xs text-muted">{h.name}</p>}
-      <dl className="grid grid-cols-1 gap-y-1.5 text-[13px]">
+    <div className={cn("bg-ink-50 px-4 pb-4 pt-2 dark:bg-white/[0.03]", !last && "hairline")}>
+      {h.name && <p className="pb-2 text-[13px] text-muted">{h.name}</p>}
+      <dl className="grid grid-cols-1 gap-y-[7px] text-[15px]">
         {rows.map(([k, v, cls]) => (
           <div key={k} className="flex justify-between gap-3">
             <dt className="text-muted">{k}</dt>
-            <dd className={cn("tabular text-right font-medium text-fg", cls)}>{v}</dd>
+            <dd className={cn("tabular text-right text-fg", cls)}>{v}</dd>
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[12px] font-semibold text-muted">Held at</p>
-      <ul className="mt-1 divide-y divide-line rounded-xl bg-surface">
-        {h.lots.map((l) => (
+      <p className="mt-4 px-1 text-[13px] text-muted">Held at</p>
+      <ul className="mt-1 overflow-hidden rounded-[10px] bg-surface">
+        {h.lots.map((l, i) => (
           <li key={l.holding_id}>
-            <button className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-ink-50" onClick={() => open({ kind: "holding", holdingId: l.holding_id })} aria-label={`Edit ${h.symbol} at ${l.broker}`}>
-              <span className="text-fg2">{l.broker}</span>
-              <span className="tabular text-muted">
+            <button
+              className={cn("flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-[15px] active:bg-fill/[0.08]", i < h.lots.length - 1 && "hairline")}
+              onClick={() => open({ kind: "holding", holdingId: l.holding_id })}
+              aria-label={`Edit ${h.symbol} at ${l.broker}`}
+            >
+              <span className="text-fg">{l.broker}</span>
+              <span className="tabular flex items-center gap-1 text-muted">
                 {qty(l.quantity)} @ {priceStr(l.avg_cost, c)}
-                <Pencil className="ml-2 inline h-3 w-3 text-faint" />
+                <ChevronRight className="h-4 w-4 text-faint" />
               </span>
             </button>
           </li>
         ))}
       </ul>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => open({ kind: "holding", preset: { symbol: h.symbol } })}>
+        <Button variant="secondary" className="rounded-full px-3.5 py-1.5 text-[13px]" onClick={() => open({ kind: "holding", preset: { symbol: h.symbol } })}>
           <Plus className="h-3.5 w-3.5" /> Another broker
         </Button>
-        <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => open({ kind: "stock", instrumentId: h.instrument_id })}>
+        <Button variant="secondary" className="rounded-full px-3.5 py-1.5 text-[13px]" onClick={() => open({ kind: "stock", instrumentId: h.instrument_id })}>
           Stock settings
         </Button>
-        <Button variant="ghost" className="px-3 py-1.5 text-xs" onClick={() => open({ kind: "price", instrumentId: h.instrument_id })}>
+        <Button variant="secondary" className="rounded-full px-3.5 py-1.5 text-[13px]" onClick={() => open({ kind: "price", instrumentId: h.instrument_id })}>
           Enter price
         </Button>
       </div>

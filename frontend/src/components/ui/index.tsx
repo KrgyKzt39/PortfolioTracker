@@ -5,11 +5,12 @@ import { cn } from "../../lib/format";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "pill";
 const variants: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:brightness-110 active:brightness-95",
-  secondary: "bg-surface text-fg shadow-card hover:bg-ink-50",
-  ghost: "text-accent hover:bg-accent-soft",
-  danger: "bg-down-soft text-down hover:bg-down/20",
-  pill: "rounded-full bg-accent-soft text-accent hover:bg-accent/15",
+  // iOS button styles: filled, gray (tinted fill), plain text
+  primary: "bg-accent text-white active:opacity-80",
+  secondary: "bg-fill/[0.12] text-accent active:opacity-70",
+  ghost: "text-accent active:opacity-60",
+  danger: "bg-down-strong/[0.12] text-down active:opacity-70",
+  pill: "rounded-full bg-fill/[0.12] text-accent active:opacity-70",
 };
 
 export function Button({ variant = "primary", loading, className, children, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; loading?: boolean }) {
@@ -18,7 +19,7 @@ export function Button({ variant = "primary", loading, className, children, disa
       {...rest}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none",
+        "inline-flex items-center justify-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[15px] font-semibold transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none",
         variants[variant],
         className,
       )}
@@ -35,7 +36,7 @@ export function IconButton({ label, className, children, ...rest }: ButtonHTMLAt
       {...rest}
       aria-label={label}
       title={label}
-      className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full text-fg2 hover:bg-ink-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent", className)}
+      className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full text-accent active:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent", className)}
     >
       {children}
     </button>
@@ -68,14 +69,34 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("overflow-hidden rounded-[20px] bg-surface shadow-card", className)}>{children}</section>;
+  return <section className={cn("overflow-hidden rounded-[14px] bg-surface", className)}>{children}</section>;
+}
+
+/** iOS large-title header with toolbar icons on the right. */
+export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="flex min-h-[44px] items-end justify-between gap-2 px-1 pt-1">
+      <h1 className="text-[34px] font-bold leading-[1.1] tracking-[-0.025em] text-fg">{title}</h1>
+      {children && <div className="-mr-1.5 flex shrink-0 items-center gap-0.5 pb-0.5">{children}</div>}
+    </div>
+  );
+}
+
+/** Section title above a grouped list. */
+export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex items-end justify-between gap-2 px-1 pb-1.5 pt-2">
+      <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-fg">{children}</h2>
+      {action}
+    </div>
+  );
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="px-6 py-10 text-center">
-      <p className="font-semibold text-fg2">{title}</p>
-      {children && <div className="mt-2 text-sm text-muted">{children}</div>}
+      <p className="text-[17px] font-semibold text-fg">{title}</p>
+      {children && <div className="mt-1.5 text-[15px] text-muted">{children}</div>}
     </div>
   );
 }
@@ -89,11 +110,11 @@ export function Field({ label, error, hint, children, className }: { label: stri
   const id = useId();
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <label htmlFor={id} className="text-xs font-medium text-muted">
+      <label htmlFor={id} className="px-1 text-[13px] text-muted">
         {label}
       </label>
       {children(id)}
-      {hint && !error && <p className="text-2xs text-faint">{hint}</p>}
+      {hint && !error && <p className="px-1 text-[12px] text-muted">{hint}</p>}
       {error && (
         <p className="text-2xs text-down" role="alert">
           {error}
@@ -104,7 +125,7 @@ export function Field({ label, error, hint, children, className }: { label: stri
 }
 
 const inputCls =
-  "w-full rounded-xl border border-transparent bg-ink-900 px-3 py-2.5 text-[16px] text-fg placeholder:text-faint focus:border-accent focus:bg-surface focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60";
+  "w-full rounded-[10px] border-0 bg-field px-3.5 py-[11px] text-[17px] text-fg placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-60";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputCls, props.className)} />;
@@ -134,7 +155,7 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
 
 export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-[10px] bg-ink-100 p-0.5">
+    <div role="radiogroup" aria-label={label} className="flex rounded-[9px] bg-fill/[0.12] p-[2px]">
       {options.map((o) => (
         <button
           key={o.value}
@@ -142,7 +163,7 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cn("flex-1 rounded-[8px] px-2 py-1.5 text-xs font-semibold transition-colors", value === o.value ? "bg-surface text-fg shadow-[0_1px_3px_rgba(15,23,42,0.12)] dark:bg-ink-600" : "text-muted hover:text-fg2")}
+          className={cn("flex-1 rounded-[7px] px-2 py-[5px] text-[13px] transition-colors", value === o.value ? "bg-white font-semibold text-fg shadow-[0_3px_8px_rgba(0,0,0,0.12),0_3px_1px_rgba(0,0,0,0.04)] dark:bg-[#636366]" : "font-medium text-fg")}
         >
           {o.label}
         </button>
@@ -178,18 +199,19 @@ export function Sheet({ open, onClose, title, children, footer, wide }: { open: 
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative flex max-h-[92dvh] w-full flex-col rounded-t-[22px] bg-surface shadow-2xl focus:outline-none sm:rounded-[26px]",
+          "relative flex max-h-[92dvh] w-full flex-col rounded-t-[12px] bg-sheet shadow-2xl focus:outline-none sm:rounded-[14px]",
           wide ? "sm:max-w-2xl" : "sm:max-w-lg",
         )}
       >
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="text-[17px] font-semibold text-fg">{title}</h2>
-          <IconButton label="Close" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </IconButton>
+        <div className="mx-auto mt-[5px] h-[5px] w-9 rounded-full bg-fill/30 sm:hidden" aria-hidden />
+        <div className="relative flex items-center justify-center px-14 pb-2 pt-2.5">
+          <h2 className="truncate text-[17px] font-semibold text-fg">{title}</h2>
+          <button type="button" aria-label="Close" title="Close" onClick={onClose} className="absolute right-4 top-2 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-fill/[0.12] text-muted active:opacity-60">
+            <X className="h-4 w-4" strokeWidth={2.5} />
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
-        {footer && <div className="flex gap-2 border-t border-line px-5 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">{footer}</div>}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2">{children}</div>
+        {footer && <div className="flex gap-2.5 px-4 pb-[max(env(safe-area-inset-bottom),14px)] pt-2 [&>button]:h-[50px] [&>button]:rounded-[14px] [&>button]:text-[17px]">{footer}</div>}
       </div>
     </div>
   );
@@ -215,7 +237,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex max-w-md items-start gap-2 rounded-2xl border px-4 py-3 text-sm shadow-xl",
+              "pointer-events-auto flex max-w-md items-start gap-2 rounded-full border px-4 py-2.5 text-[15px] font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)]",
               t.kind === "success" && "border-up-soft bg-surface text-up",
               t.kind === "error" && "border-down-soft bg-surface text-down",
               t.kind === "info" && "border-line bg-surface text-fg",

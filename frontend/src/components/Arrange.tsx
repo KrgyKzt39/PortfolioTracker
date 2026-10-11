@@ -194,7 +194,7 @@ function ItemView({ symbol, lifted, handleProps }: { symbol: string; lifted?: bo
       )}
     >
       <GripVertical className="h-4 w-4 shrink-0 text-faint" aria-hidden />
-      <TickerBadge symbol={symbol} className="h-[26px] w-[40px]" />
+      <TickerBadge symbol={symbol} className="h-[32px] w-[32px]" />
       <span className="text-[14px] font-bold text-fg">{symbol}</span>
     </div>
   );
