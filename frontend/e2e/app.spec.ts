@@ -174,6 +174,46 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText("MYR", { exact: true })).toBeVisible();
   });
 
+  test("AI: statement PDF goes through the normal preview, and Ask answers", async ({ page }) => {
+    // The test server has no AI keys; the browser is told one exists and AI replies are mocked.
+    await page.route("**/api/meta", async (route) => {
+      const res = await route.fetch();
+      await route.fulfill({ response: res, json: { ...(await res.json()), ai_providers: ["gemini"] } });
+    });
+    await page.route("**/api/ai/statement", (route) =>
+      route.fulfill({
+        json: {
+          provider: "gemini",
+          statement_date: "2026-09-30",
+          rows: [{ symbol: "5258.KL", name: "Bank Islam, Malaysia", quantity: "3000", avg_cost: "2.40", currency: "MYR", kind: "stock" }],
+        },
+      }),
+    );
+    let asked: { role: string; content: string }[] = [];
+    await page.route("**/api/ai/ask", async (route) => {
+      asked = route.request().postDataJSON().messages;
+      await route.fulfill({ json: { answer: "- Most of your value is in MYR (about 60%).", provider: "gemini" } });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Upload" }).click();
+    const d = dialog(page);
+    await d.getByLabel("Broker", { exact: true }).selectOption({ label: "Moomoo" });
+    await d.getByLabel("Holdings file").setInputFiles({ name: "statement.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
+    await expect(d.getByText(/Read 1 holding from the PDF/)).toBeVisible();
+    await d.getByRole("button", { name: "Import" }).click();
+    await expect(page.getByText(/Imported: 1 new/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "5258.KL details" })).toBeVisible();
+
+    await page.goto("/#/dashboard");
+    await page.getByRole("button", { name: "Ask" }).click();
+    const a = dialog(page);
+    await a.getByRole("button", { name: /split by currency/ }).click();
+    await expect(a.getByText("Most of your value is in MYR")).toBeVisible();
+    expect(asked).toEqual([{ role: "user", content: "How is my money split by currency?" }]);
+    await expect(a.getByText(/not financial advice/)).toBeVisible();
+    await noHorizontalScroll(page);
+  });
+
   test("all tabs fit 375, 390 and 430px phones", async ({ page }) => {
     for (const width of [375, 390, 430]) {
       await page.setViewportSize({ width, height: 860 });

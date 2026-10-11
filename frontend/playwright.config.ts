@@ -22,6 +22,6 @@ export default defineConfig({
     command: `${py} -m uvicorn app.main:app --app-dir ../backend --host 127.0.0.1 --port 8123`,
     url: "http://127.0.0.1:8123/api/health",
     reuseExistingServer: false,
-    env: { PT_DATA_DIR: dir, PT_DB_PATH: join(dir, "e2e.db"), PT_SCHEDULER: "0", PT_DEMO: "0" },
+    env: { PT_DATA_DIR: dir, PT_DB_PATH: join(dir, "e2e.db"), PT_SCHEDULER: "0", PT_DEMO: "0", GEMINI_API_KEY: "", GROQ_API_KEY: "", LLM_BASE_URL: "" },
   },
 });

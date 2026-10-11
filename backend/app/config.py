@@ -44,3 +44,13 @@ def longbridge_configured() -> bool:
 
 
 ENABLE_SCHEDULER = os.environ.get("PT_SCHEDULER", "1") == "1"
+
+# AI features (optional). Keys stay on this PC and are never sent to the browser.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+# Any OpenAI-compatible endpoint, e.g. OpenRouter or a local Ollama (http://localhost:11434/v1).
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_MODEL = os.environ.get("LLM_MODEL", "")

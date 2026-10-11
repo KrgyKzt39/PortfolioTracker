@@ -1,6 +1,6 @@
 # Status
 
-Last verified 2026-10-10.
+Last verified 2026-10-11.
 
 ## Model
 
@@ -16,16 +16,17 @@ Holdings are snapshots (broker + stock + quantity + average cost) entered by han
 - Dividends tab: expected per year/month, last 12 months received, "did these arrive?" confirmations, chart, by holding, recently received.
 - Calendar tab: ex-dates, pay dates, earnings dates for held stocks; manual entry; Longbridge fills US/HK/SG dates automatically when configured.
 - Price sources: Longbridge, Alpaca, Alpha Vantage, Yahoo (opt-in), manual; ECB FX. Live only for quotes < 5 min old.
+- AI (optional, needs GEMINI_API_KEY and/or GROQ_API_KEY): statement PDF upload into the normal import preview; "Ask" on the Dashboard tab for questions about your own holdings (factual, not advice).
 - Backup/restore with integrity checks, audit log, privacy toggle, PWA manifest, iPhone safe areas, start.bat / start-demo.bat.
 
 ## Tests
 
-- Backend: `cd backend && ../.venv/bin/python -m pytest` → 46 passed (currencies, funds, value history, ExchangeRate-API fallback, holdings, categories/layout, import CSV/Excel replace/merge, valuation, FX, dividends confirm flow, calendar, Longbridge prices + dates (mocked), v1→v2 migration, backup/restore).
-- Browser: `cd frontend && npx playwright test` → 11 passed at 390px plus 375/430px overflow checks, no console errors.
+- Backend: `cd backend && ../.venv/bin/python -m pytest` → 53 passed (AI statement/assistant with mocked providers, currencies, funds, value history, ExchangeRate-API fallback, holdings, categories/layout, import CSV/Excel replace/merge, valuation, FX, dividends confirm flow, calendar, Longbridge prices + dates (mocked), v1→v2 migration, backup/restore).
+- Browser: `cd frontend && npx playwright test` → 12 passed at 390px plus 375/430px overflow checks, no console errors.
 
 ## Known limitations
 
-- Longbridge, Alpaca, Yahoo and Frankfurter are tested against mocked responses only (blocked from the build environment).
+- Verified live: Alpaca, ECB + ExchangeRate-API FX, Longbridge dividends and earnings dates, Gemini, Groq. Not yet: Longbridge quotes (websocket, needs the PC) and Yahoo.
 - Bursa dividend/earnings dates are manual (no free source).
 - Visual theme to be revisited.
 

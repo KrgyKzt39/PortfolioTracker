@@ -22,6 +22,7 @@ Tabs:
 - **Dashboard**: value over time (one point per day, saved when the app is opened, on refresh and nightly) with 1M/3M/6M/1Y/All; "Where your money is" by category / currency / broker.
 - **Dividends**: expected per year and per month, received in the last 12 months, "Did these arrive?" confirmations, month-by-month chart, by holding, recently received.
 - **Calendar**: ex-dates, pay dates and earnings dates for stocks you hold (next 4 months), manual entry; Longbridge fills US/HK/SG automatically when keys are set.
+- **AI** (only when a key is set): Upload accepts a statement PDF; Gemini reads the holdings, which go into the normal import preview (nothing saved until Import). Dashboard has an **Ask** button: questions about your own holdings, answered by Groq first (fast), Gemini as fallback. Compact JSON snapshot only, factual, not advice, with a data-sharing notice.
 - **Settings** (gear): base currency (49 currencies), price sources, brokers, categories, export/upload holdings, backup/restore; Advanced: refresh intervals, manual FX rates, change history.
 
 Data and maths:
@@ -38,7 +39,7 @@ Prices and FX (in priority order, per symbol with fallback; last good value kept
 5. Manual prices / NAVs.
 FX: ECB via Frankfurter, then ExchangeRate-API open endpoint (open.er-api.com) for currencies the ECB lacks, then Yahoo if enabled, then manual. "Live" only when the quote's own timestamp is < 5 minutes old.
 
-Tests: backend 46 (`cd backend && ../.venv/bin/python -m pytest`), browser 11 at phone widths (`cd frontend && npm run build && npx playwright test`). All passing at handoff.
+Tests: backend 53 (`cd backend && ../.venv/bin/python -m pytest`), browser 12 at phone widths (`cd frontend && npm run build && npx playwright test`). All passing at handoff.
 
 ## 3. Code map
 
@@ -65,11 +66,11 @@ start.bat, start-demo.bat, start.sh, backend/run.py, .env.example
 
 ## 4. Parked and to-do list (consolidated)
 
-### A. Next to build (owner asked for these)
+### A. Built (2026-10-11), for reference
 
-1. **LLM connection setting.** One OpenAI-compatible endpoint setting (base URL, model, API key in `.env`) so the owner can use a free tier (Groq, Gemini's OpenAI-compatible endpoint, OpenRouter `:free` models) or a local model via Ollama. Keys stay server-side. Free tiers are small and change often; verify current limits on the provider pages.
-2. **Statement upload with extraction.** Upload a broker statement PDF, extract its text (e.g. `pypdf`/`pdfplumber`), ask the LLM for a strict JSON list `{symbol, name, quantity, avg_cost, currency}`, then feed that into the existing import preview (`holdings.process_import` logic: same replace/merge, same review screen, nothing saved before the user confirms). Text PDFs first; note that scanned/image PDFs need OCR or a vision model. Never send more than the statement text; tell the user the text goes to the chosen LLM provider.
-3. **AI assistant.** Owner wants one similar to Moomoo/Longbridge's, on the free LLM for now. Keep it narrow: a plain-language weekly summary plus Q&A about the user's own data (exposure by currency/category, which holdings drive dividends, what changed). Factual, not buy/sell advice (investment advice is licensed under Malaysia's Securities Commission); show a short disclaimer. Send a compact JSON of the portfolio, not raw history.
+1. **LLM connection**: `backend/app/ai.py`. Gemini (native API, reads PDFs), Groq (`openai/gpt-oss-120b`, `reasoning_effort: low` so answers fit the free tier's 8k tokens/minute), or any OpenAI-compatible endpoint via `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`. Automatic fallback between configured providers. Keys in `.env` only.
+2. **Statement upload**: `POST /api/ai/statement` returns rows; the browser turns them into a CSV and runs the existing `/import/preview` + `/import/commit`. Gemini gets the PDF itself (works for scanned PDFs); without Gemini, text is extracted with `pypdf` and sent to the text model. Import also accepts a "Type" column (fund/etf/reit/stock); funds become manual-priced.
+3. **Assistant**: `POST /api/ai/ask`, `components/AskSheet.tsx`. Pre-computed breakdowns and top lists in the snapshot so the model does not do its own arithmetic. Verified live on demo data (answers in 1 to 9 s).
 
 ### B. Product work (use the Product Management plugin and the owner's `.agent` skills)
 
@@ -81,11 +82,14 @@ start.bat, start-demo.bat, start.sh, backend/run.py, .env.example
 6. **Theme / visual refresh.** Current look follows the original screenshot (deep navy, blue hero, green/red/orange). Owner wants it improved later.
 7. **Letting friends use it.** Needs auth, per-user data, a cloud database, HTTPS hosting, a privacy notice (PDPA), and a market-data plan: personal Longbridge/Alpaca keys must not be used to serve other people's prices. Native app optional later (a home-screen web app works now).
 
-### D. Verify on the owner's PC (could not be tested from the cloud container: outbound network was blocked)
+### D. Verification status
 
-8. Longbridge with real keys: prices, dividend dates (description text is parsed with a regex: `<amount> <CCY>`), earnings calendar (date and before/after-market labels).
-9. Alpaca: the snapshot response shape was written from documentation knowledge, not a live call. Check `AlpacaData.fetch_prices` against a real response.
-10. Frankfurter (`api.frankfurter.dev/v1/latest`), ExchangeRate-API (`open.er-api.com/v6/latest/USD`, attribution required by their terms), Yahoo (if enabled).
+Verified live from the cloud session on 2026-10-11: Alpaca prices, Frankfurter (ECB) and ExchangeRate-API FX, Longbridge dividends (English dates are MM/DD/YYYY) and earnings calendar, Gemini statement extraction, Groq assistant.
+
+Still to verify on the owner's PC:
+8. **Longbridge quotes.** Uses a websocket that ignores the cloud proxy, so it could not run in the cloud. Alpaca covers US prices if it fails.
+9. **Earnings calendar speed.** Longbridge's calendar only returns reliable results one day per request, so the job asks day by day for 60 days per market (US/HK/SG), paging up to 5 x 500 per day. It runs in a background thread every 12 h; in the cloud it took about 5.5 min for 5 symbols. Very busy earnings days may be cut off. If it is too slow, lower `days` in `fetch_earnings`.
+10. Yahoo (if enabled).
 11. `start.bat` on Windows end to end (venv, pip, npm build, first-run iPhone prompt, firewall prompt). Only the Linux path (`start.sh` / `run.py`) was executed.
 
 ### E. Decisions already made (do not reopen without the owner)

@@ -148,6 +148,10 @@ function SettingsBody({ s }: { s: Settings }) {
             </Button>
           </form>
           <p className="text-2xs text-faint">Alpha Vantage (US, optional): {meta.data?.alphavantage_configured ? "configured" : "set ALPHAVANTAGE_API_KEY in .env"}.</p>
+          <p className="text-2xs text-faint">
+            AI (statement PDFs and Ask):{" "}
+            {meta.data?.ai_providers?.length ? `${meta.data.ai_providers.join(", ")} configured` : "set GEMINI_API_KEY and/or GROQ_API_KEY in .env (both have free tiers)"}.
+          </p>
           <FxSection />
           <AuditSection />
         </div>

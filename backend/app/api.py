@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from . import backup, config, dividends
+from . import ai, backup, config, dividends
 from .db import get_session
 from .holdings import ValidationError, delete_holding, export_csv, process_import, save_holding, to_decimal
 from .jsonutil import DecimalJSONResponse, DecimalRoute
@@ -66,7 +66,8 @@ def meta():
     return {"currencies": [{"code": c, "name": n, "symbol": s} for c, (n, s) in ALL.items()], "demo": config.DEMO, "db_path": config.DB_PATH.name,
             "lan_urls": [f"http://{ip}:{config.PORT}" for ip in lan_addresses()] if config.HOST in ("0.0.0.0", "") else [],
             "alphavantage_configured": bool(config.ALPHAVANTAGE_API_KEY),
-            "alpaca_configured": config.alpaca_configured(), "longbridge_configured": config.longbridge_configured()}
+            "alpaca_configured": config.alpaca_configured(), "longbridge_configured": config.longbridge_configured(),
+            "ai_providers": ai.available()}
 
 
 @router.get("/settings")
@@ -475,6 +476,33 @@ def remove_earnings(eid: int, db: Session = DB):
         db.delete(er)
         return {"ok": True}
     return write(db, go)
+
+
+# ---------------------------------------------------------------- AI (optional)
+@router.get("/ai/status")
+def ai_status():
+    return {"providers": ai.available()}
+
+
+@router.post("/ai/statement")
+async def ai_statement(file: UploadFile = File(...)):
+    """Read holdings from a statement PDF. Returns rows for the normal import preview; saves nothing."""
+    content = await file.read()
+    try:
+        out = ai.extract_statement(content, file.filename or "statement.pdf")
+    except ai.AIError as exc:
+        fail(ValidationError(str(exc)))
+    return out
+
+
+@router.post("/ai/ask")
+def ai_ask(body: dict, db: Session = DB):
+    pf = build_portfolio(db)
+    div = dividends.summary(db)
+    try:
+        return ai.ask(pf, div, body.get("messages") or [])
+    except ai.AIError as exc:
+        fail(ValidationError(str(exc)))
 
 
 # ---------------------------------------------------------------- audit, snapshots, backups

@@ -32,6 +32,7 @@ class RefreshState:
 
     def snapshot(self) -> dict:
         return {
+            "events": dict(EVENTS_STATE),
             "running": self.running,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
@@ -167,15 +168,7 @@ def refresh_all() -> dict:
                 del remaining[iid]
         for iid, inst in remaining.items():
             errors[inst.symbol] = "; ".join(tried[iid]) or (
-                "no enabled provider covers this symbol (enter a manual price, or enable Yahoo for .KL)")
-
-    if settings["longbridge_enabled"] and config.longbridge_configured():
-        try:
-            n = refresh_events()
-            if n is not None:
-                results["dividend & earnings dates"] = f"longbridge ({n} stocks)"
-        except ProviderError as exc:
-            errors["dividend & earnings dates"] = f"longbridge: {exc}"
+                "no enabled price source covers this symbol (enter a price, or enable Yahoo in Settings)")
 
     from ..snapshots import write_snapshot
     try:
@@ -208,7 +201,30 @@ def start_refresh() -> bool:
             STATE.running = False
 
     threading.Thread(target=work, daemon=True, name="price-refresh").start()
+    threading.Thread(target=_events_job, daemon=True, name="events-refresh").start()
     return True
+
+
+EVENTS_STATE = {"running": False, "message": "", "finished_at": None}
+
+
+def _events_job():
+    """Dividend and earnings dates take a minute or two, so they run separately from prices."""
+    if EVENTS_STATE["running"]:
+        return
+    with session_scope() as db:
+        settings = get_settings(db)
+    if not (settings["longbridge_enabled"] and config.longbridge_configured()):
+        return
+    EVENTS_STATE["running"] = True
+    try:
+        n = refresh_events()
+        EVENTS_STATE["message"] = f"Dividend and earnings dates updated for {n} stocks" if n else "Dividend and earnings dates are up to date"
+    except Exception as exc:  # reported in Settings; never breaks price refresh
+        EVENTS_STATE["message"] = f"Dividend and earnings dates failed: {exc}"
+    finally:
+        EVENTS_STATE["running"] = False
+        EVENTS_STATE["finished_at"] = utcnow()
 
 
 def save_manual_price(db, inst: Instrument, price: Decimal, on, currency: str | None = None):

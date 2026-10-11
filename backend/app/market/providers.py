@@ -347,8 +347,9 @@ class LongbridgeQuotes:
             return out, errs
         return self._run(call, timeout=60)
 
-    def fetch_earnings(self, symbols: set[str], start: date, days: int = 90, calendar_ctx=None) -> list[dict]:
-        """Earnings dates for the given symbols, scanning the market-wide calendar in 14-day windows."""
+    def fetch_earnings(self, symbols: set[str], start: date, days: int = 60, calendar_ctx=None) -> list[dict]:
+        """Earnings dates for the given symbols from the market-wide calendar.
+        The endpoint returns one day per request, so we ask day by day and page within each day."""
         markets = sorted({s.rsplit(".", 1)[-1] for s in symbols})
 
         def call():
@@ -360,19 +361,22 @@ class LongbridgeQuotes:
             category = _report_category()
             found = []
             for market in markets:
-                d = start
-                while d < start + timedelta(days=days):
-                    end = min(d + timedelta(days=13), start + timedelta(days=days))
-                    resp = ctx.finance_calendar(category, d.isoformat(), end.isoformat(), market, 1000)
-                    for group in resp.list:
-                        for info in group.infos:
+                for n in range(days):
+                    day = (start + timedelta(days=n)).isoformat()
+                    offset = 0
+                    for _ in range(5):  # page within a busy day
+                        resp = ctx.finance_calendar(category, day, day, market, 500, offset)
+                        infos = [i for g in resp.list for i in g.infos]
+                        if not infos:
+                            break
+                        for info in infos:
                             if info.symbol in symbols:
                                 e = parse_earnings(info)
                                 if e:
                                     found.append(e)
-                    d = end + timedelta(days=1)
+                        offset += len(infos)
             return found
-        return self._run(call, timeout=90)
+        return self._run(call, timeout=600)
 
     def fetch_prices(self, symbols: list[str]) -> tuple[dict[str, PriceQuote], dict[str, str]]:
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
@@ -417,11 +421,14 @@ _DPS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([A-Z]{3})\b")
 
 
 def _lb_date(v: str) -> date | None:
-    v = (v or "").strip()[:10].replace(".", "-").replace("/", "-")
-    try:
-        return date.fromisoformat(v)
-    except ValueError:
-        return None
+    """Longbridge dates: "2026.11.19" (Chinese responses) or "11/19/2026" (English), sometimes with a suffix."""
+    v = (v or "").strip().split(" ")[0]
+    for fmt in ("%Y.%m.%d", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(v, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def parse_dividend(item) -> dict | None:

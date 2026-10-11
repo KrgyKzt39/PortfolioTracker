@@ -267,3 +267,12 @@ def test_value_history_recorded_when_opened(api, client):
     api.portfolio()
     snaps = api.ok(client.get("/api/snapshots"))
     assert len(snaps) == 1 and D(snaps[0]["value"]) == 1100
+
+
+def test_import_type_column_makes_funds_manual_priced(api, client):
+    a = api.broker("ASNB")
+    csv = b"symbol,name,quantity,avg_cost,currency,kind\nASB,Amanah Saham Bumiputera,5000,1,MYR,fund\nMSFT,Microsoft,1,400,USD,Buy\n"
+    api.ok(client.post("/api/import/commit", files={"file": ("s.csv", csv, "text/csv")}, data={"broker_id": a["id"]}))
+    inst = {i["symbol"]: i for i in api.ok(client.get("/api/instruments"))}
+    assert inst["ASB"]["kind"] == "fund" and inst["ASB"]["price_mode"] == "manual"
+    assert inst["MSFT"]["kind"] == "stock"  # unknown type values are ignored

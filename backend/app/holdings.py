@@ -135,7 +135,9 @@ ALIASES = {
                  "cost per share", "avg. cost", "purchase price"],
     "currency": ["currency", "ccy"],
     "category": ["category", "group"],
+    "kind": ["kind", "type", "asset type", "asset class"],
 }
+KINDS = {"stock": "stock", "equity": "stock", "etf": "etf", "reit": "reit", "fund": "fund", "unit trust": "fund"}
 
 
 def read_table(content: bytes, filename: str) -> tuple[list[str], list[list[str]]]:
@@ -242,7 +244,8 @@ def process_import(db: Session, content: bytes, filename: str, broker_id: int | 
                 results.append(res)
                 continue
             inst, new = get_or_create_instrument(db, cell(r, "symbol"), cell(r, "currency") or None,
-                                                 cell(r, "name") or None, cat_id)
+                                                 cell(r, "name") or None, cat_id,
+                                                 KINDS.get((cell(r, "kind") or "").strip().lower()))
             if new:
                 created["instruments"].append(inst.symbol)
             if cat_id and inst.category_id != cat_id:

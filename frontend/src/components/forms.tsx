@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { CURRENCY_LIST, cn, money, priceStr, today } from "../lib/format";
-import { useBrokers, useCategories, useInstruments, useInvalidateAll, useOpenSheet } from "../lib/hooks";
+import { useBrokers, useCategories, useInstruments, useInvalidateAll, useMeta, useOpenSheet } from "../lib/hooks";
 import type { Broker, Category, DividendEvent, Instrument, Payment } from "../lib/types";
 import { Button, ConfirmSheet, Field, Input, Segmented, Select, Sheet, Spinner, Textarea, Toggle, useToast } from "./ui";
 
@@ -521,7 +521,15 @@ const IMPORT_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "currency", label: "Currency" },
   { key: "category", label: "Category" },
   { key: "broker", label: "Broker" },
+  { key: "kind", label: "Type" },
 ];
+
+type StatementRow = { symbol: string; name: string | null; quantity: string; avg_cost: string | null; currency: string | null; kind: string };
+const csvCell = (v: string | null) => (v == null ? "" : /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+function statementCsv(rows: StatementRow[]) {
+  const cols = ["symbol", "name", "quantity", "avg_cost", "currency", "kind"] as const;
+  return [cols.join(","), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(","))].join("\n");
+}
 
 interface ImportPreview {
   header: string[];
@@ -542,6 +550,29 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const meta = useMeta();
+  const canReadPdf = (meta.data?.ai_providers ?? []).length > 0;
+
+  const readStatement = async (pdf: File) => {
+    const form = new FormData();
+    form.append("file", pdf);
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api<{ rows: StatementRow[]; provider: string; statement_date: string | null }>("/ai/statement", { form });
+      if (!r.rows.length) throw new Error("No holdings found in this PDF. Try your broker's Excel or CSV export instead.");
+      const csv = new File([statementCsv(r.rows)], pdf.name.replace(/\.pdf$/i, "") + ".csv", { type: "text/csv" });
+      setFile(csv);
+      setAiNote(`Read ${r.rows.length} holding${r.rows.length === 1 ? "" : "s"} from the PDF${r.statement_date ? ` (statement date ${r.statement_date})` : ""}. AI can misread numbers: check every row below before importing.`);
+      setBusy(false);
+      await run("preview", { file: csv, mapping: null });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const run = async (mode: "preview" | "commit", o: { file?: File; brokerId?: string; replace?: boolean; mapping?: Record<string, number | null> | null } = {}) => {
     const f = o.file ?? file;
@@ -594,7 +625,10 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="space-y-4">
-        <p className="text-xs text-muted">Export holdings from your broker as Excel (.xlsx) or CSV. Each row needs a symbol, quantity and average cost.</p>
+        <p className="text-xs text-muted">
+          Export holdings from your broker as Excel (.xlsx) or CSV. Each row needs a symbol, quantity and average cost.
+          {canReadPdf && " You can also upload a PDF statement: AI reads the holdings and you check them before anything is saved."}
+        </p>
         <Field label="Broker">
           {(id) => (
             <Select
@@ -617,14 +651,16 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
         </Field>
         <input
           type="file"
-          accept=".xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept={`.xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet${canReadPdf ? ",.pdf,application/pdf" : ""}`}
           aria-label="Holdings file"
           className="block w-full text-sm text-muted file:mr-3 file:rounded-xl file:border-0 file:bg-ink-700 file:px-3 file:py-2 file:font-semibold file:text-slate-100"
           onChange={(e) => {
             const f = e.target.files?.[0] ?? null;
-            setFile(f);
             setMapping(null);
             setPreview(null);
+            setAiNote(null);
+            if (f && f.name.toLowerCase().endsWith(".pdf")) return void readStatement(f);
+            setFile(f);
             if (f) run("preview", { file: f, mapping: null });
           }}
         />
@@ -637,6 +673,8 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
           label="This file is my full list for this broker"
           description="Stocks not in the file are removed from this broker. Turn off to only add or update."
         />
+        {busy && !preview && <p className="text-xs text-muted">Reading…</p>}
+        {aiNote && <p className="rounded-xl bg-gold/10 p-3 text-xs text-gold">{aiNote}</p>}
         <FormError error={err} />
         {preview && s && (
           <>

@@ -100,7 +100,7 @@ def test_longbridge_first_then_alpaca_then_nothing_for_kl(api, creds, monkeypatc
                               "BRK-B": "alpaca"}
     assert seen[0].headers["APCA-API-KEY-ID"] == "kid" and seen[0].url.params["feed"] == "iex"
     assert seen[0].url.params["symbols"] == "BRK.B"  # only what Longbridge could not price
-    assert "1155.KL" in out["errors"] and "no enabled provider" in out["errors"]["1155.KL"]
+    assert "1155.KL" in out["errors"] and "no enabled price source" in out["errors"]["1155.KL"]
     pf = api.portfolio("USD")
     h = row(pf, "MSFT")
     assert D(h["price"]) == D("500.10") and h["price_source"] == "longbridge" and h["price_status"] == "Live"
@@ -155,7 +155,7 @@ class FakeCalendar:
     def __init__(self, items):
         self.items, self.calls = items, []
 
-    def finance_calendar(self, category, start, end, market, count):
+    def finance_calendar(self, category, start, end, market, count, offset=0):
         self.calls.append((start, end, market))
 
         @dataclass
@@ -175,7 +175,10 @@ class FakeCalendar:
         class Resp:
             list: list
 
-        groups = [Group(d, [Info(s, d, "Q3 results", "After Market")]) for s, d in self.items if start <= d.replace(".", "-") <= end]
+        if offset:  # one page per day is enough for the fake
+            return Resp([])
+        groups = [Group(d, [Info(s, d + " (EST)", "Q3 results", "Post")]) for s, d in self.items
+                  if start <= d.replace(".", "-") <= end]
         return Resp(groups)
 
 
@@ -191,7 +194,7 @@ def test_longbridge_dividend_and_earnings_dates(api, creds, monkeypatch):
     manual_ex = (date.today() - timedelta(days=180)).isoformat()
     api.ok(api.c.post("/api/dividends/events", json={"instrument_id": iid, "ex_date": manual_ex, "amount_per_share": "1.11"}))
     monkeypatch.setattr(service, "_longbridge_fundamental", FakeFundamental({"MSFT.US": [
-        ("Dividend per share 0.98 USD", soon, paid), ("每股派息 0.91 USD", past, past_pay),
+        ("Cash dividend 0.98 USD", soon.replace(".", "/")[5:] + "/" + soon[:4], paid), ("每股派息 0.91 USD", past, past_pay),
         ("Stock dividend 1 for 10", past, past_pay), ("Dividend 0.91 USD", manual_ex.replace("-", "."), past_pay)]}))
     earn = (date.today() + timedelta(days=18)).strftime("%Y.%m.%d")
     cal = FakeCalendar([("MSFT.US", earn), ("TSLA.US", earn)])
@@ -203,7 +206,7 @@ def test_longbridge_dividend_and_earnings_dates(api, creds, monkeypatch):
     assert D(evs[manual_ex]["amount_per_share"]) == D("1.11")  # manual entry never overwritten
     cal_items = api.ok(api.c.get("/api/calendar"))
     assert [(c["kind"], c["symbol"], c.get("session")) for c in cal_items if c["kind"] == "earnings"] == [("earnings", "MSFT", "after")]
-    assert {m for _, _, m in cal.calls} == {"US"}
+    assert {m for _, _, m in cal.calls} == {"US"} and all(s == e for s, e, _ in cal.calls)  # one day per call
     assert service.refresh_events() is None  # not due again for 12 hours
 
 

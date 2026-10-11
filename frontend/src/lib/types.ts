@@ -211,4 +211,5 @@ export interface Meta {
   alphavantage_configured: boolean;
   alpaca_configured: boolean;
   longbridge_configured: boolean;
+  ai_providers: string[];
 }

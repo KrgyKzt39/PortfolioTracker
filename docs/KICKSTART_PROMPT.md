@@ -15,6 +15,7 @@ Then work through the handoff list in this order, checking with me at each step:
 
 - **D. Verify on this PC** (items 8–11): test the live price/FX/date sources with my keys from `.env` and fix anything that doesn't match the real responses (Alpaca's response shape especially). Run `start.bat` once on Windows end to end.
 - **B. Product work** (items 4–5): use the Product Management plugin to write a short competitive brief and propose the real differentiator. Remember I rejected "Malaysia-first" and "cross-broker AI". Keep it brief and ask before writing long specs.
-- **A. Build** (items 1–3): the LLM connection setting (OpenAI-compatible: Groq, Gemini, OpenRouter, or local Ollama), then statement PDF upload with extraction into the existing import preview, then the narrow AI assistant (summary + Q&A on my data, factual only, not advice).
+- **A. Built already** (items 1–3: AI provider setup, statement PDF upload, Ask). Try them with my real keys and statements and fix what breaks.
+- **D. Verify on my PC**: Longbridge quotes (websocket) and the earnings-calendar run time, then `start.bat` end to end.
 
 Ground rules: keep the app simple, with no extra stats or settings unless I ask. Every feature gets tests (backend plus a phone-width browser test). Never count expected dividends as income, never label delayed or manual prices as Live, keep money as Decimal, and keep secrets in `.env`. Theme refresh and sharing with friends are on hold until I say so. Commit in small steps with clear messages, and tell me plainly what you verified and what you couldn't.

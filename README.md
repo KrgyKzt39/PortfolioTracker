@@ -8,7 +8,8 @@ Your brokers stay the record of your trades. This app holds a snapshot of each h
 - **Dashboard**: value over time and where your money is (by category, currency or broker).
 - **Dividends**: expected per year and per month, received in the last 12 months, a month-by-month chart, each holding's expected dividend and yield, and a short "did these arrive?" list to confirm payments.
 - **Calendar**: upcoming ex-dates, payment dates and earnings dates for stocks you hold.
-- **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first.
+- **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first. With an AI key set, you can also upload a PDF statement.
+- **Ask** (optional, Dashboard tab): plain-language questions about your own holdings, e.g. "How is my money split by currency?". Factual answers from your data, not advice.
 
 ## Run it on Windows
 
@@ -43,6 +44,11 @@ See `.env.example`. Main settings:
 | `PT_DATA_DIR` | `./data` | Database and backups folder. |
 | `ALPHAVANTAGE_API_KEY` | empty | Optional free key for US stock prices. Kept server-side. |
 | `PT_SCHEDULER` | `1` | Background refresh on the interval set in Settings. |
+| `GEMINI_API_KEY` | empty | Optional free key ([aistudio.google.com](https://aistudio.google.com/apikey)). Reads statement PDFs; fallback for Ask. |
+| `GROQ_API_KEY` | empty | Optional free key ([console.groq.com](https://console.groq.com/keys)). Fast answers for Ask. |
+| `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | empty | Any other OpenAI-compatible endpoint (OpenRouter, local Ollama). |
+
+**AI and your data:** statement PDFs and Ask send your holdings (symbols, amounts, broker names) to the AI provider. Free tiers may use what you send to improve their models. Nothing is sent unless you use these features.
 
 The app has **no login**. Do not port-forward it or expose it to the internet.
 
@@ -111,6 +117,7 @@ backend/app/valuation.py    holdings + prices + FX -> category cards and totals
 backend/app/dividends.py    dividend dates, confirmed payments, summary, calendar
 backend/app/market/         price sources, Longbridge dates, background refresh
 backend/app/ledger.py       only used to convert databases from the first version
+backend/app/ai.py           statement PDF reading and Ask (Gemini, Groq, OpenAI-compatible)
 backend/app/backup.py       backup/restore with integrity checks
 backend/app/api.py          HTTP API
 frontend/src/pages/         Dashboard (Portfolio), Dividends, Calendar
