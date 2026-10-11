@@ -223,6 +223,31 @@ class AlphaVantage(SingleQuoteBatch):
         return PriceQuote(symbol, Decimal(q["05. price"]), "USD", datetime(d.year, d.month, d.day), "delayed", self.name)
 
 
+def alphavantage_earnings(client: httpx.Client, api_key: str, horizon: str = "3month") -> list[dict]:
+    """All US earnings dates for the next 3 months in one request (CSV). Uses 1 of the free tier's daily calls."""
+    import csv
+    import io
+    try:
+        r = client.get(AlphaVantage.url, params={"function": "EARNINGS_CALENDAR", "horizon": horizon, "apikey": api_key},
+                       timeout=30)
+    except httpx.HTTPError as exc:
+        raise ProviderError(f"alphavantage: {exc}") from exc
+    if r.status_code != 200 or not r.text.startswith("symbol,"):
+        raise ProviderError(f"alphavantage: {r.text[:200] or r.status_code}")  # limits come back as JSON text
+    out = []
+    for row in csv.DictReader(io.StringIO(r.text)):
+        try:
+            d = date.fromisoformat(row.get("reportDate") or "")
+        except ValueError:
+            continue
+        t = (row.get("timeOfTheDay") or "").lower()
+        fy = row.get("fiscalDateEnding")
+        out.append({"symbol": (row.get("symbol") or "").upper(), "date": d,
+                    "session": "before" if t.startswith("pre") else "after" if t.startswith("post") else None,
+                    "title": f"Results for the quarter ending {fy}" if fy else None})
+    return out
+
+
 def us_symbol(inst) -> str | None:
     """Plain US ticker for a USD instrument without an exchange suffix (BRK-B -> BRK.B)."""
     sym = inst.symbol.upper()

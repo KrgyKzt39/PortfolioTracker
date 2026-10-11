@@ -9,7 +9,7 @@ Your brokers stay the record of your trades. This app holds a snapshot of each h
 - **Dividends**: expected per year and per month, received in the last 12 months, a month-by-month chart, each holding's expected dividend and yield, and a short "did these arrive?" list to confirm payments.
 - **Calendar**: upcoming ex-dates, payment dates and earnings dates for stocks you hold.
 - **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first. With an AI key set, you can also upload a PDF statement.
-- **Ask** (optional, Dashboard tab): plain-language questions about your own holdings, e.g. "How is my money split by currency?". Factual answers from your data, not advice.
+- **Ask AI** (optional, its own tab): plain-language questions about your own holdings, e.g. "How is my money split by currency?". Factual answers from your data, not advice.
 
 ## Run it on Windows
 
@@ -62,7 +62,8 @@ Price sources are tried in order; the first one that covers a symbol and returns
 | 2 | **Alpaca** (documented REST API) | US stocks and ETFs | Free Alpaca account (paper is fine), key ID + secret in `.env` |
 | 3 | Alpha Vantage | US | Optional free key, ~25 requests/day |
 | 4 | Yahoo Finance (unofficial, **off by default**) | Everything incl. Bursa (.KL) | Toggle in Settings |
-| – | Longbridge dividend & earnings dates | US, HK, SG holdings | Automatic when Longbridge keys are set (every 12 h on refresh) |
+| – | Alpha Vantage earnings calendar | US earnings dates, one request for all | Free key (same `ALPHAVANTAGE_API_KEY`) |
+| – | Longbridge dividend & earnings dates | US, HK, SG holdings (US earnings only if no Alpha Vantage key) | Automatic when Longbridge keys are set (every 12 h on refresh) |
 | – | Manual | Anything, incl. ASNB | Always available |
 | FX | Frankfurter (ECB reference rates), then ExchangeRate-API (open.er-api.com) | 49 currencies | On by default, no key |
 

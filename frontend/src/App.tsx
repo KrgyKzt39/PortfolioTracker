@@ -4,6 +4,7 @@ import { BrokerSheet, CategorySheet, DividendSheet, EarningsSheet, HoldingSheet,
 import { SettingsSheet } from "./components/SettingsSheet";
 import { setCurrencies } from "./lib/format";
 import { PrivacyCtx, SheetCtx, useMeta, useSettings, type SheetRequest } from "./lib/hooks";
+import { Ask } from "./pages/Ask";
 import { Calendar } from "./pages/Calendar";
 import { Dashboard } from "./pages/Dashboard";
 import { Dividends } from "./pages/Dividends";
@@ -48,6 +49,7 @@ export default function App() {
             {tab === "dashboard" && <Overview />}
             {tab === "dividends" && <Dividends />}
             {tab === "calendar" && <Calendar />}
+            {tab === "ask" && <Ask />}
           </main>
         </div>
         <BottomNav tab={tab} onChange={go} />

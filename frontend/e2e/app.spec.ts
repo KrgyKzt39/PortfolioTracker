@@ -204,20 +204,22 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText(/Imported: 1 new/)).toBeVisible();
     await expect(page.getByRole("button", { name: "5258.KL details" })).toBeVisible();
 
-    await page.goto("/#/dashboard");
-    await page.getByRole("button", { name: "Ask" }).click();
-    const a = dialog(page);
+    await page.getByRole("navigation").getByRole("button", { name: "Ask AI" }).click();
+    const a = page.getByRole("main");
     await a.getByRole("button", { name: /split by currency/ }).click();
     await expect(a.getByText("Most of your value is in MYR")).toBeVisible();
     expect(asked).toEqual([{ role: "user", content: "How is my money split by currency?" }]);
     await expect(a.getByText(/not financial advice/)).toBeVisible();
     await noHorizontalScroll(page);
+    await page.getByRole("navigation").getByRole("button", { name: "Calendar" }).click();
+    await page.getByRole("navigation").getByRole("button", { name: "Ask AI" }).click();
+    await expect(a.getByText("Most of your value is in MYR")).toBeVisible(); // kept when switching tabs
   });
 
   test("all tabs fit 375, 390 and 430px phones", async ({ page }) => {
     for (const width of [375, 390, 430]) {
       await page.setViewportSize({ width, height: 860 });
-      for (const tab of ["portfolio", "dashboard", "dividends", "calendar"]) {
+      for (const tab of ["portfolio", "dashboard", "dividends", "calendar", "ask"]) {
         await page.goto(`/#/${tab}`);
         await page.waitForLoadState("networkidle");
         await expect(page.getByRole("navigation")).toBeVisible();

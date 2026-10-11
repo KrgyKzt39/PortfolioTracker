@@ -16,7 +16,7 @@ Holdings are snapshots (broker + stock + quantity + average cost) entered by han
 - Dividends tab: expected per year/month, last 12 months received, "did these arrive?" confirmations, chart, by holding, recently received.
 - Calendar tab: ex-dates, pay dates, earnings dates for held stocks; manual entry; Longbridge fills US/HK/SG dates automatically when configured.
 - Price sources: Longbridge, Alpaca, Alpha Vantage, Yahoo (opt-in), manual; ECB FX. Live only for quotes < 5 min old.
-- AI (optional, needs GEMINI_API_KEY and/or GROQ_API_KEY): statement PDF upload into the normal import preview; "Ask" on the Dashboard tab for questions about your own holdings (factual, not advice).
+- AI (optional, needs GEMINI_API_KEY and/or GROQ_API_KEY): statement PDF upload into the normal import preview; an "Ask AI" tab for questions about your own holdings (factual, not advice).
 - Backup/restore with integrity checks, audit log, privacy toggle, PWA manifest, iPhone safe areas, start.bat / start-demo.bat.
 
 ## Tests

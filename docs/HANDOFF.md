@@ -22,7 +22,7 @@ Tabs:
 - **Dashboard**: value over time (one point per day, saved when the app is opened, on refresh and nightly) with 1M/3M/6M/1Y/All; "Where your money is" by category / currency / broker.
 - **Dividends**: expected per year and per month, received in the last 12 months, "Did these arrive?" confirmations, month-by-month chart, by holding, recently received.
 - **Calendar**: ex-dates, pay dates and earnings dates for stocks you hold (next 4 months), manual entry; Longbridge fills US/HK/SG automatically when keys are set.
-- **AI** (only when a key is set): Upload accepts a statement PDF; Gemini reads the holdings, which go into the normal import preview (nothing saved until Import). Dashboard has an **Ask** button: questions about your own holdings, answered by Groq first (fast), Gemini as fallback. Compact JSON snapshot only, factual, not advice, with a data-sharing notice.
+- **AI** (only when a key is set): Upload accepts a statement PDF; Gemini reads the holdings, which go into the normal import preview (nothing saved until Import). An **Ask AI** tab: questions about your own holdings, answered by Groq first (fast), Gemini as fallback. Compact JSON snapshot only, factual, not advice, with a data-sharing notice.
 - **Settings** (gear): base currency (49 currencies), price sources, brokers, categories, export/upload holdings, backup/restore; Advanced: refresh intervals, manual FX rates, change history.
 
 Data and maths:
@@ -70,7 +70,7 @@ start.bat, start-demo.bat, start.sh, backend/run.py, .env.example
 
 1. **LLM connection**: `backend/app/ai.py`. Gemini (native API, reads PDFs), Groq (`openai/gpt-oss-120b`, `reasoning_effort: low` so answers fit the free tier's 8k tokens/minute), or any OpenAI-compatible endpoint via `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`. Automatic fallback between configured providers. Keys in `.env` only.
 2. **Statement upload**: `POST /api/ai/statement` returns rows; the browser turns them into a CSV and runs the existing `/import/preview` + `/import/commit`. Gemini gets the PDF itself (works for scanned PDFs); without Gemini, text is extracted with `pypdf` and sent to the text model. Import also accepts a "Type" column (fund/etf/reit/stock); funds become manual-priced.
-3. **Assistant**: `POST /api/ai/ask`, `components/AskSheet.tsx`. Pre-computed breakdowns and top lists in the snapshot so the model does not do its own arithmetic. Verified live on demo data (answers in 1 to 9 s).
+3. **Assistant**: `POST /api/ai/ask`, `pages/Ask.tsx`. Pre-computed breakdowns and top lists in the snapshot so the model does not do its own arithmetic. Verified live on demo data (answers in 1 to 9 s).
 
 ### B. Product work (use the Product Management plugin and the owner's `.agent` skills)
 
@@ -88,7 +88,7 @@ Verified live from the cloud session on 2026-10-11: Alpaca prices, Frankfurter (
 
 Still to verify on the owner's PC:
 8. **Longbridge quotes.** Uses a websocket that ignores the cloud proxy, so it could not run in the cloud. Alpaca covers US prices if it fails.
-9. **Earnings calendar speed.** Longbridge's calendar only returns reliable results one day per request, so the job asks day by day for 60 days per market (US/HK/SG), paging up to 5 x 500 per day. It runs in a background thread every 12 h; in the cloud it took about 5.5 min for 5 symbols. Very busy earnings days may be cut off. If it is too slow, lower `days` in `fetch_earnings`.
+9. **Earnings calendar speed.** US earnings now come from Alpha Vantage's EARNINGS_CALENDAR (one request returns every US date for 3 months; needs the free key). Longbridge is only asked for HK/SG, or US when there is no Alpha Vantage key. Longbridge's calendar only returns reliable results one day per request, so the job asks day by day for 60 days per market (US/HK/SG), paging up to 5 x 500 per day. It runs in a background thread every 12 h; in the cloud it took about 5.5 min for 5 symbols. Very busy earnings days may be cut off. If it is too slow, lower `days` in `fetch_earnings`.
 10. Yahoo (if enabled).
 11. `start.bat` on Windows end to end (venv, pip, npm build, first-run iPhone prompt, firewall prompt). Only the Linux path (`start.sh` / `run.py`) was executed.
 

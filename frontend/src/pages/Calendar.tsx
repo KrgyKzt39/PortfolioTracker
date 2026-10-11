@@ -62,7 +62,9 @@ export function Calendar() {
           <Empty title="Nothing in the next 4 months">
             {meta.data?.longbridge_configured
               ? "Dates for US, HK and SG stocks fill in from Longbridge when you press Refresh. Add Bursa dates yourself."
-              : "Add dividend and earnings dates yourself, or connect Longbridge in .env to fill US, HK and SG dates automatically."}
+              : meta.data?.alphavantage_configured
+                ? "US earnings dates fill in from Alpha Vantage when you press Refresh. Add other dates yourself."
+                : "Add dividend and earnings dates yourself, or add a free Alpha Vantage key (US earnings) or Longbridge keys (US, HK, SG) in .env."}
           </Empty>
         </Card>
       ) : (

@@ -1,12 +1,13 @@
-import { BarChart3, CalendarDays, DollarSign, PieChart } from "lucide-react";
+import { BarChart3, CalendarDays, DollarSign, PieChart, Sparkles } from "lucide-react";
 import { cn } from "../lib/format";
 
-export type Tab = "portfolio" | "dashboard" | "dividends" | "calendar";
+export type Tab = "portfolio" | "dashboard" | "dividends" | "calendar" | "ask";
 export const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
   { id: "portfolio", label: "Portfolio", icon: BarChart3 },
   { id: "dashboard", label: "Dashboard", icon: PieChart },
   { id: "dividends", label: "Dividends", icon: DollarSign },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
+  { id: "ask", label: "Ask AI", icon: Sparkles },
 ];
 
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {

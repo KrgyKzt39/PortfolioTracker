@@ -214,7 +214,7 @@ def _events_job():
         return
     with session_scope() as db:
         settings = get_settings(db)
-    if not (settings["longbridge_enabled"] and config.longbridge_configured()):
+    if not ((settings["longbridge_enabled"] and config.longbridge_configured()) or config.ALPHAVANTAGE_API_KEY):
         return
     EVENTS_STATE["running"] = True
     try:
@@ -245,27 +245,59 @@ def save_manual_price(db, inst: Instrument, price: Decimal, on, currency: str | 
 
 
 def refresh_events(force: bool = False) -> int | None:
-    """Pull dividend dates and earnings dates from Longbridge for stocks you hold (US/HK/SG).
+    """Dividend and earnings dates for stocks you hold. Longbridge: dividends (US/HK/SG) and earnings (HK/SG, and US
+    when there is no Alpha Vantage key). Alpha Vantage: all US earnings in one request.
     Runs at most every EVENTS_EVERY_HOURS unless forced. Manual entries are never overwritten."""
     from datetime import date, timedelta
 
+    from .providers import alphavantage_earnings, us_symbol
+
+    with session_scope() as db:
+        lb_on = get_settings(db)["longbridge_enabled"] and config.longbridge_configured()
+    av_key = config.ALPHAVANTAGE_API_KEY
     lb = LongbridgeQuotes(config.LONGBRIDGE_APP_KEY, config.LONGBRIDGE_APP_SECRET, config.LONGBRIDGE_ACCESS_TOKEN,
                           ctx=_longbridge_ctx)
     with session_scope() as db:
         held_ids = {h.instrument_id for h in db.scalars(select(Holding))}
-        due = {}
+        lb_due, av_due = {}, {}
         for inst in db.scalars(select(Instrument).where(Instrument.id.in_(held_ids))):
-            sym = lb.map_symbol(inst)
             fresh = inst.events_checked_at and utcnow() - inst.events_checked_at < timedelta(hours=EVENTS_EVERY_HOURS)
-            if sym and (force or not fresh):
-                due[sym] = inst.id
-    if not due:
+            if fresh and not force:
+                continue
+            if lb_on and (sym := lb.map_symbol(inst)):
+                lb_due[sym] = inst.id
+            if av_key and (sym := us_symbol(inst)):
+                av_due[sym] = inst.id
+    if not lb_due and not av_due:
         return None
     today = date.today()
-    divs, _errs = lb.fetch_dividends(sorted(due), fundamental_ctx=_longbridge_fundamental)
-    earnings = lb.fetch_earnings(set(due), today, calendar_ctx=_longbridge_calendar)
+    divs: dict = {}
+    earnings: list[tuple[int, dict, str]] = []  # (instrument id, earnings date, source)
+    checked: set[int] = set()  # got an answer: not due again for EVENTS_EVERY_HOURS
+    replaced: set[int] = set()  # earnings source answered: its old future dates are replaced
+    errors = []
+    if av_due:
+        try:
+            with _client_factory() as client:
+                rows = alphavantage_earnings(client, av_key)
+            earnings += [(av_due[e["symbol"]], e, "alphavantage") for e in rows if e["symbol"] in av_due]
+            replaced |= set(av_due.values())
+            checked |= set(av_due.values()) - set(lb_due.values())
+        except ProviderError as exc:
+            errors.append(str(exc))
+    if lb_due:
+        divs, _errs = lb.fetch_dividends(sorted(lb_due), fundamental_ctx=_longbridge_fundamental)
+        checked |= {lb_due[s] for s in divs}
+        lb_earn_syms = {s for s, iid in lb_due.items() if iid not in replaced}  # US via Alpha Vantage if it answered
+        if lb_earn_syms:
+            try:
+                earnings += [(lb_due[e["symbol"]], e, "longbridge")
+                             for e in lb.fetch_earnings(lb_earn_syms, today, calendar_ctx=_longbridge_calendar)]
+                replaced |= {lb_due[s] for s in lb_earn_syms}
+            except ProviderError as exc:
+                errors.append(f"longbridge: {exc}")
     with session_scope() as db:
-        for sym, iid in due.items():
+        for sym, iid in lb_due.items():
             inst = db.get(Instrument, iid)
             for d in divs.get(sym, []):
                 if d["ex_date"] < today - timedelta(days=400) or d["currency"] != inst.currency:
@@ -279,19 +311,17 @@ def refresh_events(force: bool = False) -> int | None:
                                          source="longbridge"))
                 elif ev.source == "longbridge" and ev.status != "received":
                     ev.pay_date, ev.amount_per_share, ev.status = d["pay_date"], d["amount"], status
-            if sym in divs:
-                inst.events_checked_at = utcnow()
-            for er in db.scalars(select(EarningsDate).where(EarningsDate.instrument_id == iid,
-                                                            EarningsDate.source == "longbridge",
-                                                            EarningsDate.date >= today)):
-                db.delete(er)
+        for iid in checked:
+            db.get(Instrument, iid).events_checked_at = utcnow()
+        for er in db.scalars(select(EarningsDate).where(EarningsDate.instrument_id.in_(replaced),
+                                                        EarningsDate.source.in_(("longbridge", "alphavantage")),
+                                                        EarningsDate.date >= today)):
+            db.delete(er)
         db.flush()
-        for e in earnings:
-            iid = due.get(e["symbol"])
-            if iid is None:
-                continue
+        for iid, e, source in earnings:
             if db.scalar(select(EarningsDate).where(EarningsDate.instrument_id == iid, EarningsDate.date == e["date"])):
                 continue
-            db.add(EarningsDate(instrument_id=iid, date=e["date"], session=e["session"], title=e["title"],
-                                source="longbridge"))
-    return len(due)
+            db.add(EarningsDate(instrument_id=iid, date=e["date"], session=e["session"], title=e["title"], source=source))
+    if errors and not earnings and not divs:
+        raise ProviderError("; ".join(errors))
+    return len(set(lb_due.values()) | set(av_due.values()))

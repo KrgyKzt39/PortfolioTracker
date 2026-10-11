@@ -234,3 +234,50 @@ def test_fx_fallback_for_currencies_the_ecb_does_not_publish(api, monkeypatch):
     assert "open.er-api.com" in seen
     rates = {(r["base"], r["quote"]): r for r in api.ok(api.c.get("/api/fx"))}
     assert D(rates[("USD", "TWD")]["rate"]) == D("31.5") and rates[("USD", "MYR")]["source"] == "frankfurter"
+
+
+def av_calendar_transport(seen, body):
+    def handler(req: httpx.Request):
+        seen.append(req)
+        assert req.url.host == "www.alphavantage.co" and req.url.params["function"] == "EARNINGS_CALENDAR"
+        return httpx.Response(200, text=body)
+    return httpx.MockTransport(handler)
+
+
+def test_us_earnings_from_alphavantage_in_one_call_hk_from_longbridge(api, creds, monkeypatch):
+    a = api.broker("LB")
+    for sym in ("MSFT", "BRK-B", "0005.HK", "1155.KL"):
+        api.holding(a["id"], sym, 10, 1)
+    monkeypatch.setattr(config, "ALPHAVANTAGE_API_KEY", "av")
+    d1 = (date.today() + timedelta(days=17)).isoformat()
+    d2 = (date.today() + timedelta(days=26)).isoformat()
+    csv = ("symbol,name,reportDate,fiscalDateEnding,estimate,currency,timeOfTheDay\n"
+           f"MSFT,MICROSOFT,{d1},2026-09-30,4.71,USD,post-market\nBRK.B,BERKSHIRE,{d2},2026-09-30,5.66,USD,\n"
+           f"AAPL,APPLE,{d1},2026-09-30,1.98,USD,pre-market\n")
+    seen = []
+    monkeypatch.setattr(service, "_client_factory", lambda: httpx.Client(transport=av_calendar_transport(seen, csv)))
+    monkeypatch.setattr(service, "_longbridge_fundamental", FakeFundamental({}))
+    hk_day = (date.today() + timedelta(days=20)).strftime("%Y.%m.%d")
+    cal = FakeCalendar([("5.HK", hk_day), ("MSFT.US", hk_day)])
+    monkeypatch.setattr(service, "_longbridge_calendar", cal)
+    assert service.refresh_events() == 3
+    assert len(seen) == 1 and {m for _, _, m in cal.calls} == {"HK"}  # US not asked day by day
+    got = sorted((c["date"], c["symbol"], c.get("session")) for c in api.ok(api.c.get("/api/calendar")) if c["kind"] == "earnings")
+    assert got == sorted([(d1, "MSFT", "after"), (d2, "BRK-B", None), (hk_day.replace(".", "-"), "0005.HK", "after")])
+
+
+def test_alphavantage_earnings_without_longbridge_and_limit_message(api, monkeypatch):
+    a = api.broker()
+    api.holding(a["id"], "MSFT", 1, 1)
+    monkeypatch.setattr(config, "ALPHAVANTAGE_API_KEY", "av")
+    monkeypatch.setattr(config, "LONGBRIDGE_APP_KEY", "")
+    note = '{"Information": "Our standard API rate limit is 25 requests per day."}'
+    monkeypatch.setattr(service, "_client_factory", lambda: httpx.Client(transport=av_calendar_transport([], note)))
+    with pytest.raises(service.ProviderError, match="25 requests per day"):
+        service.refresh_events()
+    d1 = (date.today() + timedelta(days=5)).isoformat()
+    ok = f"symbol,name,reportDate,fiscalDateEnding,estimate,currency,timeOfTheDay\nMSFT,M,{d1},2026-09-30,,USD,pre-market\n"
+    monkeypatch.setattr(service, "_client_factory", lambda: httpx.Client(transport=av_calendar_transport([], ok)))
+    assert service.refresh_events() == 1
+    assert [(c["date"], c.get("session")) for c in api.ok(api.c.get("/api/calendar")) if c["kind"] == "earnings"] == [(d1, "before")]
+    assert service.refresh_events() is None  # not due again for 12 hours

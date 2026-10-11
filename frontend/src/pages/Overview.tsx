@@ -3,9 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../lib/api";
 import { cn, money, pct, shortDate, tone } from "../lib/format";
-import { useMeta, usePortfolio, usePrivacy, useSettings } from "../lib/hooks";
-import { MessageCircle } from "lucide-react";
-import { AskSheet } from "../components/AskSheet";
+import { usePortfolio, usePrivacy, useSettings } from "../lib/hooks";
 import type { Portfolio } from "../lib/types";
 import { Card, Empty, ErrorBox, Segmented, Spinner } from "../components/ui";
 
@@ -18,8 +16,6 @@ export function Overview() {
   const settings = useSettings();
   const base = settings.data?.base_currency;
   const pf = usePortfolio(base);
-  const meta = useMeta();
-  const [asking, setAsking] = useState(false);
   const history = useQuery({
     queryKey: ["snapshots", base],
     queryFn: () => api<{ date: string; value: string; pl: string }[]>(`/snapshots${base ? `?base=${base}` : ""}`),
@@ -29,15 +25,7 @@ export function Overview() {
   if (pf.error) return <ErrorBox error={pf.error} onRetry={() => pf.refetch()} />;
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 px-1">
-        <h1 className="text-2xl font-extrabold text-white">Dashboard</h1>
-        {!!meta.data?.ai_providers?.length && (
-          <button type="button" onClick={() => setAsking(true)} className="flex items-center gap-1.5 rounded-full bg-ink-800 px-3 py-1.5 text-sm font-semibold text-slate-100 hover:bg-ink-700">
-            <MessageCircle className="h-4 w-4" /> Ask
-          </button>
-        )}
-      </div>
-      {asking && <AskSheet onClose={() => setAsking(false)} />}
+      <h1 className="px-1 text-2xl font-extrabold text-white">Dashboard</h1>
       <ValueChart data={pf.data!} history={history.data ?? []} loading={history.isLoading} />
       <Breakdown data={pf.data!} />
     </div>
