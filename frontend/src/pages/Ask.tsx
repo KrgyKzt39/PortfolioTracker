@@ -46,7 +46,7 @@ export function Ask() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 px-1">
-        <h1 className="text-2xl font-extrabold text-white">Ask AI</h1>
+        <h1 className="text-[28px] font-bold tracking-tight text-fg">Ask AI</h1>
         {msgs.length > 0 && (
           <button type="button" className="text-sm font-semibold text-accent" onClick={() => setMsgs([])}>
             New chat
@@ -63,7 +63,7 @@ export function Ask() {
           {msgs.length === 0 && (
             <div className="space-y-2">
               {QUICK.map((q) => (
-                <button key={q} type="button" onClick={() => send(q)} className="block w-full rounded-2xl bg-ink-800 px-4 py-3 text-left text-sm text-slate-200 hover:bg-ink-700">
+                <button key={q} type="button" onClick={() => send(q)} className="block w-full rounded-2xl bg-ink-800 px-4 py-3 text-left text-sm text-fg2 hover:bg-ink-700">
                   {q}
                 </button>
               ))}
@@ -76,8 +76,8 @@ export function Ask() {
                 data-role={m.role}
                 className={
                   m.role === "user"
-                    ? "ml-10 rounded-2xl rounded-br-md bg-accent/20 px-3.5 py-2.5 text-sm text-slate-100"
-                    : "mr-4 whitespace-pre-wrap break-words rounded-2xl rounded-bl-md bg-ink-800 px-3.5 py-2.5 text-sm leading-relaxed text-slate-200"
+                    ? "ml-10 rounded-2xl rounded-br-md bg-accent/20 px-3.5 py-2.5 text-sm text-fg"
+                    : "mr-4 whitespace-pre-wrap break-words rounded-2xl rounded-bl-md bg-ink-800 px-3.5 py-2.5 text-sm leading-relaxed text-fg2"
                 }
               >
                 {m.content}

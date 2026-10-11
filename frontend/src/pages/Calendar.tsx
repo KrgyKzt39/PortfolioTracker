@@ -12,7 +12,7 @@ type Filter = "all" | "dividends" | "earnings";
 const KIND = {
   ex_date: { label: "Ex-dividend", icon: BadgeDollarSign, cls: "bg-gold/15 text-gold" },
   pay_date: { label: "Dividend paid", icon: Banknote, cls: "bg-up/15 text-up" },
-  earnings: { label: "Earnings", icon: FileBarChart, cls: "bg-accent/15 text-blue-300" },
+  earnings: { label: "Earnings", icon: FileBarChart, cls: "bg-accent/15 text-accent" },
 } as const;
 
 export function Calendar() {
@@ -37,7 +37,7 @@ export function Calendar() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between px-1">
-        <h1 className="text-2xl font-extrabold text-white">Calendar</h1>
+        <h1 className="text-[28px] font-bold tracking-tight text-fg">Calendar</h1>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => open({ kind: "earnings" })}>
             <Plus className="h-4 w-4" /> Earnings
@@ -70,12 +70,12 @@ export function Calendar() {
       ) : (
         months.map((mo) => (
           <Card key={mo.key}>
-            <p className="border-b border-white/5 bg-ink-850 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint">
+            <p className="border-b border-line bg-ink-50 px-4 py-2 text-[13px] font-semibold text-fg2">
               {new Date(`${mo.key}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
             </p>
             <ul>
               {mo.days.map((day) => (
-                <li key={day.date} className="flex gap-3 border-b border-white/[0.045] px-4 py-3 last:border-b-0">
+                <li key={day.date} className="flex gap-3 border-b border-line px-4 py-3 last:border-b-0">
                   <DateBlock iso={day.date} />
                   <ul className="min-w-0 flex-1 space-y-2">
                     {day.items.map((it, i) => (
@@ -98,7 +98,7 @@ function DateBlock({ iso }: { iso: string }) {
   return (
     <div className="w-11 shrink-0 text-center">
       <p className="text-[10px] font-semibold uppercase text-faint">{d.toLocaleDateString("en-GB", { weekday: "short" })}</p>
-      <p className="tabular text-[20px] font-extrabold leading-tight text-white">{d.getDate()}</p>
+      <p className="tabular text-[20px] font-semibold leading-tight text-fg">{d.getDate()}</p>
     </div>
   );
 }
@@ -134,7 +134,7 @@ function Entry({ it }: { it: CalendarItem }) {
       <TickerBadge symbol={it.symbol} className="h-[28px] w-[44px]" />
       <button className="min-w-0 flex-1 text-left" onClick={edit} disabled={it.kind === "earnings"}>
         <span className="flex items-center gap-2">
-          <span className="text-[14px] font-bold text-white">{it.symbol}</span>
+          <span className="text-[14px] font-bold text-fg">{it.symbol}</span>
           <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold", k.cls)}>
             <Icon className="h-3 w-3" aria-hidden /> {k.label}
           </span>

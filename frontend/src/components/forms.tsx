@@ -11,7 +11,7 @@ import { Button, ConfirmSheet, Field, Input, Segmented, Select, Sheet, Spinner, 
 export function FormError({ error }: { error: string | null | undefined }) {
   if (!error) return null;
   return (
-    <p role="alert" className="rounded-xl border border-down/30 bg-down/10 px-3 py-2 text-sm text-red-200">
+    <p role="alert" className="rounded-xl border border-down/30 bg-down/10 px-3 py-2 text-sm text-red-700">
       {error}
     </p>
   );
@@ -21,7 +21,7 @@ export function Section({ title, children, action }: { title: string; children: 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{title}</h3>
+        <h3 className="text-[13px] font-semibold text-muted">{title}</h3>
         {action}
       </div>
       {children}
@@ -443,11 +443,11 @@ export function PriceSheet({ instrumentId, onClose }: { instrumentId: number; on
         </div>
         <p className="text-2xs text-faint">For funds like ASNB, or stocks no price source covers.</p>
       </form>
-      <ul className="mt-4 divide-y divide-white/5 text-xs">
+      <ul className="mt-4 divide-y divide-line text-xs">
         {(history.data ?? []).slice(0, 8).map((p) => (
           <li key={p.id} className="flex justify-between py-1.5 text-muted">
             <span>{p.price_date}</span>
-            <span className="tabular text-slate-200">{priceStr(p.price, inst?.currency ?? "")}</span>
+            <span className="tabular text-fg2">{priceStr(p.price, inst?.currency ?? "")}</span>
             <span>{p.source === "manual" ? "you" : p.source}</span>
           </li>
         ))}
@@ -653,7 +653,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
           type="file"
           accept={`.xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet${canReadPdf ? ",.pdf,application/pdf" : ""}`}
           aria-label="Holdings file"
-          className="block w-full text-sm text-muted file:mr-3 file:rounded-xl file:border-0 file:bg-ink-700 file:px-3 file:py-2 file:font-semibold file:text-slate-100"
+          className="block w-full text-sm text-muted file:mr-3 file:rounded-xl file:border-0 file:bg-ink-700 file:px-3 file:py-2 file:font-semibold file:text-fg"
           onChange={(e) => {
             const f = e.target.files?.[0] ?? null;
             setMapping(null);
@@ -711,7 +711,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
                 {s.errors > 0 && <span className="text-down"> · {s.errors} with errors</span>}
               </p>
               {s.removed.length > 0 && (
-                <p className="mt-1 text-amber-200">
+                <p className="mt-1 text-amber-700">
                   Will remove from {brokerName ?? "this broker"}: {s.removed.map((r) => r.symbol).join(", ")}
                 </p>
               )}
@@ -719,10 +719,10 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
                 <p className="mt-1 text-muted">Will add {[...s.created.brokers.map((b) => `broker ${b}`), ...s.created.categories.map((c) => `category ${c}`)].join(", ")}</p>
               )}
             </div>
-            <ul className="max-h-64 divide-y divide-white/5 overflow-y-auto rounded-xl bg-ink-900 text-xs">
+            <ul className="max-h-64 divide-y divide-line overflow-y-auto rounded-xl bg-ink-900 text-xs">
               {preview.rows.map((r) => (
                 <li key={r.line} className="flex gap-3 px-3 py-2">
-                  <span className="w-20 shrink-0 font-semibold text-white">{r.symbol || `Line ${r.line}`}</span>
+                  <span className="w-20 shrink-0 font-semibold text-fg">{r.symbol || `Line ${r.line}`}</span>
                   <span className={cn("w-20 shrink-0", r.status === "error" ? "text-down" : r.status === "new" ? "text-up" : "text-muted")}>{r.status}</span>
                   <span className="min-w-0 flex-1 truncate text-muted">{r.message ?? (r.quantity ? `${Number(r.quantity).toLocaleString()} at ${r.broker}` : "")}</span>
                 </li>
@@ -828,7 +828,7 @@ export function PaymentSheet({ event, payment, onClose }: { event?: DividendEven
   if (payment)
     return (
       <Sheet open onClose={onClose} title={`${payment.symbol} dividend`}>
-        <p className="text-sm text-slate-200">
+        <p className="text-sm text-fg2">
           {money(payment.net, payment.currency)} received on {payment.pay_date}
           {payment.broker ? ` at ${payment.broker}` : ""}.
         </p>
@@ -866,7 +866,7 @@ export function PaymentSheet({ event, payment, onClose }: { event?: DividendEven
             )}
           </Field>
         </div>
-        <p className="text-sm text-slate-200">
+        <p className="text-sm text-fg2">
           You received <span className="tabular font-semibold text-up">{money(net, ccy)}</span>
         </p>
       </div>

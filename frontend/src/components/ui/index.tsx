@@ -5,11 +5,11 @@ import { cn } from "../../lib/format";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "pill";
 const variants: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:bg-blue-500 active:bg-blue-600",
-  secondary: "bg-ink-700 text-slate-100 hover:bg-ink-600",
-  ghost: "text-slate-300 hover:bg-ink-700",
-  danger: "bg-down/15 text-down hover:bg-down/25",
-  pill: "rounded-full bg-accent/15 text-blue-300 hover:bg-accent/25 border border-accent/25",
+  primary: "bg-accent text-white hover:bg-blue-800 active:bg-blue-900",
+  secondary: "bg-white text-fg shadow-card hover:bg-ink-50",
+  ghost: "text-accent hover:bg-accent-soft",
+  danger: "bg-red-50 text-down hover:bg-red-100",
+  pill: "rounded-full bg-accent-soft text-accent hover:bg-blue-100",
 };
 
 export function Button({ variant = "primary", loading, className, children, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; loading?: boolean }) {
@@ -35,7 +35,7 @@ export function IconButton({ label, className, children, ...rest }: ButtonHTMLAt
       {...rest}
       aria-label={label}
       title={label}
-      className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent", className)}
+      className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full text-fg2 hover:bg-ink-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent", className)}
     >
       {children}
     </button>
@@ -53,7 +53,7 @@ export function Spinner({ label = "Loading" }: { label?: string }) {
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const msg = error instanceof Error ? error.message : String(error);
   return (
-    <div role="alert" className="m-4 rounded-2xl border border-down/30 bg-down/10 p-4 text-sm text-red-200">
+    <div role="alert" className="m-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <div className="flex-1">{msg}</div>
@@ -68,13 +68,13 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("overflow-hidden rounded-[22px] border border-white/[0.06] bg-ink-800 shadow-lg shadow-black/20", className)}>{children}</section>;
+  return <section className={cn("overflow-hidden rounded-[20px] bg-white shadow-card", className)}>{children}</section>;
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="px-6 py-10 text-center">
-      <p className="font-semibold text-slate-200">{title}</p>
+      <p className="font-semibold text-fg2">{title}</p>
       {children && <div className="mt-2 text-sm text-muted">{children}</div>}
     </div>
   );
@@ -104,7 +104,7 @@ export function Field({ label, error, hint, children, className }: { label: stri
 }
 
 const inputCls =
-  "w-full rounded-xl border border-white/10 bg-ink-900 px-3 py-2.5 text-[16px] text-slate-100 placeholder:text-faint focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60";
+  "w-full rounded-xl border border-transparent bg-ink-900 px-3 py-2.5 text-[16px] text-fg placeholder:text-faint focus:border-accent focus:bg-white focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputCls, props.className)} />;
@@ -120,13 +120,13 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
   return (
     <label className="flex cursor-pointer items-start justify-between gap-3 py-2">
       <span>
-        <span className="block text-sm text-slate-100">{label}</span>
+        <span className="block text-sm text-fg">{label}</span>
         {description && <span className="block text-2xs text-muted">{description}</span>}
       </span>
       <span className="relative mt-0.5 inline-flex shrink-0">
         <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <span className="h-6 w-11 rounded-full bg-ink-600 transition-colors peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent" />
-        <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+        <span className="h-[31px] w-[51px] rounded-full bg-ink-600 transition-colors peer-checked:bg-[#34C759] peer-focus-visible:ring-2 peer-focus-visible:ring-accent" />
+        <span className="absolute left-0.5 top-0.5 h-[27px] w-[27px] rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.18)] transition-transform peer-checked:translate-x-5" />
       </span>
     </label>
   );
@@ -134,7 +134,7 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
 
 export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-xl bg-ink-900 p-1">
+    <div role="radiogroup" aria-label={label} className="flex rounded-[10px] bg-ink-100 p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -142,7 +142,7 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cn("flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors", value === o.value ? "bg-ink-700 text-white" : "text-muted hover:text-slate-200")}
+          className={cn("flex-1 rounded-[8px] px-2 py-1.5 text-xs font-semibold transition-colors", value === o.value ? "bg-white text-fg shadow-[0_1px_3px_rgba(15,23,42,0.12)]" : "text-muted hover:text-fg2")}
         >
           {o.label}
         </button>
@@ -170,7 +170,7 @@ export function Sheet({ open, onClose, title, children, footer, wide }: { open: 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="presentation">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
         ref={ref}
         tabIndex={-1}
@@ -178,18 +178,18 @@ export function Sheet({ open, onClose, title, children, footer, wide }: { open: 
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative flex max-h-[92dvh] w-full flex-col rounded-t-[26px] border border-white/10 bg-ink-850 shadow-2xl focus:outline-none sm:rounded-[26px]",
+          "relative flex max-h-[92dvh] w-full flex-col rounded-t-[22px] bg-white shadow-2xl focus:outline-none sm:rounded-[26px]",
           wide ? "sm:max-w-2xl" : "sm:max-w-lg",
         )}
       >
-        <div className="flex items-center justify-between border-b border-white/5 px-5 py-3.5">
-          <h2 className="text-base font-bold text-white">{title}</h2>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="text-[17px] font-semibold text-fg">{title}</h2>
           <IconButton label="Close" onClick={onClose}>
             <X className="h-5 w-5" />
           </IconButton>
         </div>
         <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
-        {footer && <div className="flex gap-2 border-t border-white/5 px-5 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">{footer}</div>}
+        {footer && <div className="flex gap-2 border-t border-line px-5 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">{footer}</div>}
       </div>
     </div>
   );
@@ -216,9 +216,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={cn(
               "pointer-events-auto flex max-w-md items-start gap-2 rounded-2xl border px-4 py-3 text-sm shadow-xl",
-              t.kind === "success" && "border-up/30 bg-[#0f2a22] text-emerald-100",
-              t.kind === "error" && "border-down/30 bg-[#2c1418] text-red-100",
-              t.kind === "info" && "border-accent/30 bg-ink-750 text-slate-100",
+              t.kind === "success" && "border-green-100 bg-white text-emerald-700",
+              t.kind === "error" && "border-red-100 bg-white text-red-700",
+              t.kind === "info" && "border-line bg-white text-fg",
             )}
           >
             {t.kind === "success" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : t.kind === "error" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <Info className="mt-0.5 h-4 w-4 shrink-0" />}
@@ -247,7 +247,7 @@ export function ConfirmSheet({ open, title, message, confirmLabel = "Delete", on
         </>
       }
     >
-      <div className="text-sm text-slate-300">{message}</div>
+      <div className="text-sm text-fg2">{message}</div>
     </Sheet>
   );
 }

@@ -128,7 +128,7 @@ export function Arrange({ data, onDone }: { data: Portfolio; onDone: () => void 
         {groups.map((g, i) => (
           <Card key={g.key} className="p-0">
             <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
-              <h2 className="truncate text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">{g.name}</h2>
+              <h2 className="truncate text-[15px] font-semibold text-fg2">{g.name}</h2>
               {g.id !== null && (
                 <span className="flex">
                   <IconButton label={`Move ${g.name} up`} className="h-8 w-8" disabled={i === 0} onClick={() => moveGroup(i, -1)}>
@@ -168,7 +168,7 @@ function Container({ id, items, symbols }: { id: string; items: number[]; symbol
         {items.map((iid) => (
           <SortableItem key={iid} id={iid} symbol={symbols.get(iid) ?? ""} />
         ))}
-        {items.length === 0 && <li className="rounded-xl border border-dashed border-white/10 px-3 py-3 text-center text-xs text-faint">Drop stocks here</li>}
+        {items.length === 0 && <li className="rounded-xl border border-dashed border-line px-3 py-3 text-center text-xs text-faint">Drop stocks here</li>}
       </ul>
     </SortableContext>
   );
@@ -189,13 +189,13 @@ function ItemView({ symbol, lifted, handleProps }: { symbol: string; lifted?: bo
       {...handleProps}
       aria-label={`Drag ${symbol}`}
       className={cn(
-        "flex touch-none select-none items-center gap-3 rounded-xl border border-white/[0.06] bg-ink-750 px-3 py-2.5",
-        lifted ? "cursor-grabbing shadow-2xl shadow-black/50 ring-1 ring-accent/60" : "cursor-grab",
+        "flex touch-none select-none items-center gap-3 rounded-xl border border-line bg-ink-750 px-3 py-2.5",
+        lifted ? "cursor-grabbing shadow-2xl shadow-slate-900/[0.04] ring-1 ring-accent/60" : "cursor-grab",
       )}
     >
       <GripVertical className="h-4 w-4 shrink-0 text-faint" aria-hidden />
       <TickerBadge symbol={symbol} className="h-[26px] w-[40px]" />
-      <span className="text-[14px] font-bold text-white">{symbol}</span>
+      <span className="text-[14px] font-bold text-fg">{symbol}</span>
     </div>
   );
 }

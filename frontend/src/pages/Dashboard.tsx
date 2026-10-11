@@ -10,12 +10,12 @@ import { TickerBadge } from "../components/TickerBadge";
 import { Arrange } from "../components/Arrange";
 
 const STATUS_STYLE: Record<PriceStatus, string> = {
-  Live: "bg-black/40 text-white",
-  Delayed: "bg-black/40 text-amber-200",
-  Cached: "bg-black/40 text-slate-300",
-  Manual: "bg-black/40 text-sky-200",
-  Unavailable: "bg-black/40 text-red-300",
-  Partial: "bg-black/40 text-amber-200",
+  Live: "bg-green-50 text-green-700",
+  Delayed: "bg-amber-50 text-amber-700",
+  Cached: "bg-ink-100 text-fg2",
+  Manual: "bg-sky-50 text-sky-700",
+  Unavailable: "bg-red-50 text-red-700",
+  Partial: "bg-amber-50 text-amber-700",
 };
 const PRICE_WORD: Record<PriceStatus, string> = {
   Live: "Live",
@@ -123,32 +123,32 @@ function Hero({ data }: { data: Portfolio }) {
   return (
     <section
       aria-label="Portfolio summary"
-      className="relative overflow-hidden rounded-[24px] border border-hero-edge/60 bg-gradient-to-br from-hero-from via-[#17305e] to-hero-to px-5 pb-4 pt-5 shadow-xl shadow-black/30"
+      className="relative overflow-hidden rounded-[20px] bg-white px-5 pb-4 pt-5 shadow-card"
     >
       <div className="flex items-center justify-between gap-2">
-        <h1 className="whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.14em] text-[#9db3dc]">Total portfolio value</h1>
+        <h1 className="whitespace-nowrap text-[15px] font-medium text-muted">Total portfolio value</h1>
         <div className="flex items-center gap-1.5">
-          {data.demo && <Badge className="bg-gold/20 text-gold">DEMO</Badge>}
-          <span title={STATUS_HELP[data.price_status]} className={cn("rounded-xl px-3 py-1.5 text-[13px] font-bold", STATUS_STYLE[data.price_status])} data-testid="price-status">
+          {data.demo && <Badge className="bg-amber-50 text-amber-700">DEMO</Badge>}
+          <span title={STATUS_HELP[data.price_status]} className={cn("rounded-full px-2.5 py-1 text-[12px] font-semibold", STATUS_STYLE[data.price_status])} data-testid="price-status">
             {refreshing ? "Updating…" : data.price_status}
           </span>
         </div>
       </div>
 
       <div className="mt-1 flex items-center gap-2">
-        <p className="tabular text-[36px] font-extrabold leading-tight tracking-tight text-white" data-testid="total-value">
+        <p className="tabular text-[34px] font-bold leading-tight tracking-tight text-fg" data-testid="total-value">
           {money(t.value, base, { hidden })}
         </p>
-        <IconButton label={hidden ? "Show values" : "Hide values"} onClick={toggle} className="text-[#9db3dc]">
+        <IconButton label={hidden ? "Show values" : "Hide values"} onClick={toggle} className="text-faint">
           {hidden ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
         </IconButton>
       </div>
 
-      <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[17px] font-bold", tone(t.pl))}>
+      <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[16px] font-semibold", tone(t.pl))}>
         <span>{money(t.pl, base, { signed: true, hidden })}</span>
         <span>{pct(t.pl_pct, { signed: true })}</span>
       </p>
-      <p className="tabular mt-2 text-[11.5px] leading-snug text-[#a9b8d6]">
+      <p className="tabular mt-2 text-[11.5px] leading-snug text-muted">
         {chunk(fx, 2).map((row, i) => (
           <span key={i} className="block">
             {row.map((f) => `${f.from}→${f.to}: ${f.rate === null ? "N/A" : fxStr(f.rate)}`).join(" · ")}
@@ -157,7 +157,7 @@ function Hero({ data }: { data: Portfolio }) {
       </p>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-[12px] text-[#a9b8d6]">
+        <p className="min-w-0 truncate text-[12px] text-muted">
           {shortStamp(data.prices_as_of ?? data.generated_at)}
         </p>
         <div className="flex shrink-0 items-center gap-1">
@@ -168,7 +168,7 @@ function Hero({ data }: { data: Portfolio }) {
             id="base-ccy"
             value={base}
             onChange={(e) => save.mutate({ base_currency: e.target.value as Portfolio["base_currency"] })}
-            className="h-8 w-[78px] rounded-full border border-white/10 bg-white/5 pl-2.5 pr-5 text-[12px] font-semibold text-[#cfe0ff] focus:outline-none focus:ring-1 focus:ring-accent"
+            className="h-8 w-[78px] appearance-none rounded-full bg-ink-100 pl-2.5 pr-5 text-[12px] font-semibold text-fg focus:outline-none focus:ring-1 focus:ring-accent"
             style={{ backgroundPosition: "right 0.4rem center" }}
           >
             {CURRENCY_LIST.map((c) => (
@@ -177,7 +177,7 @@ function Hero({ data }: { data: Portfolio }) {
               </option>
             ))}
           </select>
-          <IconButton label="Settings" onClick={() => open({ kind: "settings" })} className="h-8 w-8 text-[#9db3dc]">
+          <IconButton label="Settings" onClick={() => open({ kind: "settings" })} className="h-8 w-8 text-muted">
             <Gear className="h-[18px] w-[18px]" />
           </IconButton>
           <Button variant="pill" onClick={refresh} loading={refreshing} className="px-3.5 py-1.5">
@@ -185,7 +185,7 @@ function Hero({ data }: { data: Portfolio }) {
           </Button>
         </div>
       </div>
-      {t.incomplete && <p className="mt-2 text-2xs text-amber-200/90">Totals exclude holdings without a price or FX rate.</p>}
+      {t.incomplete && <p className="mt-2 text-2xs text-amber-700/90">Totals exclude holdings without a price or FX rate.</p>}
     </section>
   );
 }
@@ -209,14 +209,14 @@ function chunk<T>(arr: T[], n: number): T[][] {
 function Warnings({ items }: { items: string[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-2.5 text-xs text-amber-100">
+    <div className="rounded-2xl bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
       <button className="flex w-full items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
         <span className="flex-1">{items.length} data warning{items.length > 1 ? "s" : ""}</span>
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <ul className="mt-2 list-disc space-y-0.5 pl-6 text-amber-100/80">
+        <ul className="mt-2 list-disc space-y-0.5 pl-6 text-amber-700/80">
           {items.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -239,15 +239,15 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
       <div className="flex items-start justify-between gap-3 px-5 pb-3.5 pt-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <h2 className="truncate text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">{c.name}</h2>
+            <h2 className="truncate text-[15px] font-semibold text-fg2">{c.name}</h2>
             {c.id !== null && (
               <IconButton label={`Edit ${c.name}`} className="h-7 w-7 text-faint" onClick={() => open({ kind: "category", category: { id: c.id!, name: c.name, show_dividends: c.show_dividends, sort_order: c.sort_order } })}>
                 <Pencil className="h-3.5 w-3.5" />
               </IconButton>
             )}
           </div>
-          <p className="tabular truncate text-[24px] font-extrabold leading-tight text-white">{money(c.value, base, { hidden })}</p>
-          <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[15px] font-bold", tone(c.pl))}>
+          <p className="tabular truncate text-[24px] font-bold leading-tight tracking-tight text-fg">{money(c.value, base, { hidden })}</p>
+          <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[14px] font-semibold", tone(c.pl))}>
             <span>{money(c.pl, base, { signed: true, hidden })}</span>
             <span>{pct(c.pl_pct, { signed: true })}</span>
           </p>
@@ -255,12 +255,12 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
         {isDiv && (
           <div className="shrink-0 text-right">
             <p className="text-[12px] text-muted">Est. Annual DV</p>
-            <p className="tabular whitespace-nowrap text-[20px] font-extrabold leading-tight text-gold">{money(c.est_annual_dividend, base, { hidden })}</p>
+            <p className="tabular whitespace-nowrap text-[20px] font-bold leading-tight text-gold">{money(c.est_annual_dividend, base, { hidden })}</p>
             <p className="tabular text-[14px] font-semibold text-gold/90">{pct(c.dividend_yield)}</p>
           </div>
         )}
       </div>
-      <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-1.5 whitespace-nowrap border-y border-white/5 bg-ink-850 px-2.5 py-2.5 text-[9.5px] font-semibold uppercase tracking-[0.05em] text-faint" role="row">
+      <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-1.5 whitespace-nowrap border-y border-line bg-ink-50 px-2.5 py-2 text-[10px] font-medium text-faint" role="row">
         {cols.map((col, i) => (
           <span key={col} className={i === 0 ? "pl-[46px] text-left" : "text-center"} role="columnheader">
             {col}
@@ -273,7 +273,7 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
           <HoldingRow key={h.instrument_id} h={h} isDiv={isDiv} hidden={hidden} base={base} expanded={expanded === h.instrument_id} onToggle={() => setExpanded(expanded === h.instrument_id ? null : h.instrument_id)} />
         ))}
       </ul>
-      {c.incomplete && <p className="border-t border-white/5 px-5 py-2 text-2xs text-amber-200/80">Stocks without a price are left out of this total.</p>}
+      {c.incomplete && <p className="border-t border-line px-5 py-2 text-2xs text-amber-700/80">Stocks without a price are left out of this total.</p>}
     </Card>
   );
 }
@@ -282,18 +282,18 @@ function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding
   const ccy = h.currency;
   const unit = h.kind === "fund" ? (Number(h.price) === 1 ? "balance" : "units") : "shares";
   return (
-    <li className="border-b border-white/[0.045] last:border-b-0">
+    <li className="border-b border-line last:border-b-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         aria-label={`${h.symbol} details`}
-        className="grid w-full grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-center gap-1.5 whitespace-nowrap px-2.5 py-3 text-left transition-colors hover:bg-white/[0.02]"
+        className="grid w-full grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-center gap-1.5 whitespace-nowrap px-2.5 py-3 text-left transition-colors hover:bg-ink-50"
       >
         <span className="flex min-w-0 items-center gap-1.5">
           <TickerBadge symbol={h.symbol} className="h-[28px] w-[40px]" />
           <span className="min-w-0">
-            <span className="block truncate text-[13.5px] font-bold text-white">{h.symbol}</span>
+            <span className="block truncate text-[13.5px] font-bold text-fg">{h.symbol}</span>
             <span className="tabular block truncate text-[11px] text-muted">
               {qty(h.quantity)} {unit}
             </span>
@@ -320,7 +320,7 @@ function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding
               <PriceCell h={h} />
               <span className="block text-[11px] text-muted">{priceStr(h.avg_cost, ccy)} avg</span>
             </span>
-            <span className="tabular text-center text-[11.5px] font-bold text-white">{money(h.market_value, ccy, { hidden })}</span>
+            <span className="tabular text-center text-[11.5px] font-bold text-fg">{money(h.market_value, ccy, { hidden })}</span>
           </>
         )}
       </button>
@@ -331,9 +331,9 @@ function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding
 
 function PriceCell({ h }: { h: Holding }) {
   return (
-    <span className="block text-[11.5px] font-bold text-white" title={`${PRICE_WORD[h.price_status]}${h.price_source ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${h.price_date}` : ""}`}>
+    <span className="block text-[11.5px] font-bold text-fg" title={`${PRICE_WORD[h.price_status]}${h.price_source ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${h.price_date}` : ""}`}>
       {priceStr(h.price, h.currency)}
-      {(h.price_status === "Cached" || h.price_status === "Unavailable") && <span className="ml-0.5 align-super text-[9px] text-amber-300">•</span>}
+      {(h.price_status === "Cached" || h.price_status === "Unavailable") && <span className="ml-0.5 align-super text-[9px] text-amber-700">•</span>}
     </span>
   );
 }
@@ -352,22 +352,22 @@ function HoldingDetail({ h, base, hidden }: { h: Holding; base: string; hidden: 
   if (c !== base) rows.push([`Value in ${base}`, m(h.market_value_base, false, base)]);
   rows.push(["Price", `${PRICE_WORD[h.price_status]}${h.price_source && h.price_source !== "manual" ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${shortDate(h.price_date)}` : ""}`]);
   return (
-    <div className="bg-ink-850/70 px-5 pb-4 pt-1">
+    <div className="bg-ink-50 px-5 pb-4 pt-1">
       {h.name && <p className="pb-2 text-xs text-muted">{h.name}</p>}
       <dl className="grid grid-cols-1 gap-y-1.5 text-[13px]">
         {rows.map(([k, v, cls]) => (
           <div key={k} className="flex justify-between gap-3">
             <dt className="text-muted">{k}</dt>
-            <dd className={cn("tabular text-right font-medium text-slate-100", cls)}>{v}</dd>
+            <dd className={cn("tabular text-right font-medium text-fg", cls)}>{v}</dd>
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint">Held at</p>
-      <ul className="mt-1 divide-y divide-white/5 rounded-xl bg-ink-900/70">
+      <p className="mt-3 text-[12px] font-semibold text-muted">Held at</p>
+      <ul className="mt-1 divide-y divide-line rounded-xl bg-white">
         {h.lots.map((l) => (
           <li key={l.holding_id}>
-            <button className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-white/[0.03]" onClick={() => open({ kind: "holding", holdingId: l.holding_id })} aria-label={`Edit ${h.symbol} at ${l.broker}`}>
-              <span className="text-slate-200">{l.broker}</span>
+            <button className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-ink-50" onClick={() => open({ kind: "holding", holdingId: l.holding_id })} aria-label={`Edit ${h.symbol} at ${l.broker}`}>
+              <span className="text-fg2">{l.broker}</span>
               <span className="tabular text-muted">
                 {qty(l.quantity)} @ {priceStr(l.avg_cost, c)}
                 <Pencil className="ml-2 inline h-3 w-3 text-faint" />

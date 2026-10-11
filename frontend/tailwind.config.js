@@ -4,14 +4,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: { 950: "#0a101d", 900: "#0e1626", 850: "#121b2d", 800: "#172235", 750: "#1b2740", 700: "#233150", 600: "#2e3d5f" },
-        hero: { from: "#1c3769", to: "#13284f", edge: "#2f4f8f" },
-        muted: "#8a97ad",
-        faint: "#5f6c84",
-        up: "#2ed38a",
-        down: "#f2545b",
-        gold: "#f5a524",
-        accent: "#3b82f6",
+        // Light, Apple-style surfaces. "ink" is the neutral surface scale (names kept from the first dark theme).
+        page: "#F2F4F8",
+        ink: { 50: "#F7F8FB", 100: "#EEF1F6", 600: "#E1E6EE", 700: "#EDF0F5", 750: "#F3F5F9", 800: "#FFFFFF", 850: "#FFFFFF", 900: "#F3F5F9", 950: "#E9EDF3" },
+        line: "#E8ECF2",
+        fg: "#0F172A",
+        fg2: "#334155",
+        muted: "#64748B",
+        faint: "#94A3B8",
+        up: "#15803D",
+        down: "#DC2626",
+        gold: "#B45309",
+        accent: { DEFAULT: "#1D4ED8", soft: "#E7EEFD" },
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05)",
       },
       fontFamily: {
         sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Inter", "Segoe UI", "Roboto", "sans-serif"],

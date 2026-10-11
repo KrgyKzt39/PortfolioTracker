@@ -79,7 +79,7 @@ start.bat, start-demo.bat, start.sh, backend/run.py, .env.example
 
 ### C. On hold (owner said KIV)
 
-6. **Theme / visual refresh.** Current look follows the original screenshot (deep navy, blue hero, green/red/orange). Owner wants it improved later.
+6. **Theme / visual refresh: done 2026-10-11.** Light, Apple-style look (owner's reference: clean fintech mockups): page `#F2F4F8`, white cards with soft shadow, deep blue accent `#1D4ED8`, sentence-case headings, iOS segmented controls and switches, active tab as a soft blue pill. Colour tokens live in `tailwind.config.js` (`page`, `ink` surface scale, `line`, `fg`, `fg2`, `muted`, `faint`, `up`, `down`, `gold`, `accent`). No dark mode yet.
 7. **Letting friends use it.** Needs auth, per-user data, a cloud database, HTTPS hosting, a privacy notice (PDPA), and a market-data plan: personal Longbridge/Alpaca keys must not be used to serve other people's prices. Native app optional later (a home-screen web app works now).
 
 ### D. Verification status

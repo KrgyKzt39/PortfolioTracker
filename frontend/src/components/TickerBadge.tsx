@@ -1,15 +1,15 @@
 import { cn } from "../lib/format";
 
-// Muted, distinct badge palettes in the style of the reference screenshot.
+// Soft pastel badges, each passing WCAG AA for text on its own background.
 const PALETTES = [
-  "bg-[#1e3a6e] text-[#8fb6ff]",
-  "bg-[#3a1d5c] text-[#c9a2ff]",
-  "bg-[#4a3a12] text-[#f3c95a]",
-  "bg-[#123f45] text-[#6fe0e6]",
-  "bg-[#14304a] text-[#7cc4ff]",
-  "bg-[#3d1f3f] text-[#f0a2e8]",
-  "bg-[#173d2c] text-[#7ee2a8]",
-  "bg-[#452318] text-[#ffab85]",
+  "bg-[#E7EEFD] text-[#1D4ED8]",
+  "bg-[#F1E9FE] text-[#6D28D9]",
+  "bg-[#FDF3DC] text-[#A16207]",
+  "bg-[#DFF5F3] text-[#0F766E]",
+  "bg-[#E2F1FC] text-[#0369A1]",
+  "bg-[#FCE8F3] text-[#BE185D]",
+  "bg-[#E3F6E9] text-[#15803D]",
+  "bg-[#FDEBE3] text-[#C2410C]",
 ];
 
 function hash(s: string) {
@@ -24,7 +24,7 @@ export function TickerBadge({ symbol, className }: { symbol: string; className?:
     <div
       aria-hidden
       className={cn(
-        "flex h-[30px] w-[50px] shrink-0 items-center justify-center rounded-[8px] font-extrabold tracking-tight",
+        "flex h-[30px] w-[50px] shrink-0 items-center justify-center rounded-[9px] font-bold tracking-tight",
         symbol.length > 5 ? "text-[7.5px]" : symbol.length > 4 ? "text-[9px]" : "text-[10px]",
         p,
         className,

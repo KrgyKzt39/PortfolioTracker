@@ -73,7 +73,7 @@ function SettingsBody({ s }: { s: Settings }) {
           <details className="rounded-xl bg-ink-900 p-3 text-2xs text-muted">
             <summary className="cursor-pointer">Last refresh: {refresh.data.message}</summary>
             {Object.entries(refresh.data.errors).map(([k, v]) => (
-              <p key={k} className="mt-1 text-amber-200/80">
+              <p key={k} className="mt-1 text-amber-700/80">
                 {k}: {v}
               </p>
             ))}
@@ -90,13 +90,13 @@ function SettingsBody({ s }: { s: Settings }) {
           </Button>
         }
       >
-        <ul className="divide-y divide-white/5 rounded-xl bg-ink-900">
+        <ul className="divide-y divide-line rounded-xl bg-ink-900">
           {(brokers.data ?? []).map((b) => (
             <li key={b.id} className="flex items-center justify-between px-3 py-2 text-sm">
               <span>
                 {b.name} <span className="text-2xs text-faint">· {b.holdings ?? 0} holdings</span>
               </span>
-              <button className="text-faint hover:text-white" aria-label={`Edit ${b.name}`} onClick={() => openSheet({ kind: "broker", broker: b })}>
+              <button className="text-faint hover:text-fg" aria-label={`Edit ${b.name}`} onClick={() => openSheet({ kind: "broker", broker: b })}>
                 <Pencil className="h-4 w-4" />
               </button>
             </li>
@@ -113,13 +113,13 @@ function SettingsBody({ s }: { s: Settings }) {
           </Button>
         }
       >
-        <ul className="divide-y divide-white/5 rounded-xl bg-ink-900">
+        <ul className="divide-y divide-line rounded-xl bg-ink-900">
           {(categories.data ?? []).map((c) => (
             <li key={c.id} className="flex items-center justify-between px-3 py-2 text-sm">
               <span>
                 {c.name} {c.show_dividends && <span className="text-2xs text-faint">· dividend columns</span>}
               </span>
-              <button className="text-faint hover:text-white" aria-label={`Edit ${c.name}`} onClick={() => openSheet({ kind: "category", category: c })}>
+              <button className="text-faint hover:text-fg" aria-label={`Edit ${c.name}`} onClick={() => openSheet({ kind: "category", category: c })}>
                 <Pencil className="h-4 w-4" />
               </button>
             </li>
@@ -132,7 +132,7 @@ function SettingsBody({ s }: { s: Settings }) {
       <DataSection />
 
       <details className="group">
-        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-muted">Advanced</summary>
+        <summary className="cursor-pointer text-[13px] font-semibold text-muted">Advanced</summary>
         <div className="mt-4 space-y-6">
           <form
             className="grid grid-cols-2 gap-3"
@@ -161,7 +161,7 @@ function SettingsBody({ s }: { s: Settings }) {
         <div className="space-y-1 text-xs text-muted">
           {meta.data?.lan_urls.length ? (
             <p>
-              Open on your iPhone (same Wi-Fi): {meta.data.lan_urls.map((u) => <code key={u} className="mr-2 text-blue-300">{u}</code>)}
+              Open on your iPhone (same Wi-Fi): {meta.data.lan_urls.map((u) => <code key={u} className="mr-2 text-accent">{u}</code>)}
             </p>
           ) : (
             <p>LAN access is off. Set PT_HOST=0.0.0.0 in .env and restart start.bat to open the app from your iPhone.</p>
@@ -270,7 +270,7 @@ function DataSection() {
   return (
     <Section title="Data">
       <div className="flex flex-wrap gap-2">
-        <a href="/api/holdings/export.csv" className="inline-flex items-center gap-1.5 rounded-xl bg-ink-700 px-3.5 py-2 text-sm font-semibold text-slate-100 hover:bg-ink-600">
+        <a href="/api/holdings/export.csv" className="inline-flex items-center gap-1.5 rounded-xl bg-ink-700 px-3.5 py-2 text-sm font-semibold text-fg hover:bg-ink-600">
           <Download className="h-4 w-4" /> Export holdings
         </a>
         <Button variant="secondary" onClick={() => openSheet({ kind: "import" })}>
@@ -297,15 +297,15 @@ function DataSection() {
           }}
         />
       </div>
-      <ul className="divide-y divide-white/5 rounded-xl bg-ink-900 text-2xs">
+      <ul className="divide-y divide-line rounded-xl bg-ink-900 text-2xs">
         {(backups.data ?? []).slice(0, 8).map((b) => (
           <li key={b.name} className="flex items-center justify-between gap-2 px-3 py-2">
             <span className="truncate text-muted">{b.name}</span>
             <span className="flex shrink-0 gap-3">
-              <a className="text-blue-300 hover:underline" href={`/api/backups/${encodeURIComponent(b.name)}`}>
+              <a className="text-accent hover:underline" href={`/api/backups/${encodeURIComponent(b.name)}`}>
                 Download
               </a>
-              <button className="text-amber-300 hover:underline" onClick={() => setRestoreName(b.name)}>
+              <button className="text-amber-700 hover:underline" onClick={() => setRestoreName(b.name)}>
                 Restore
               </button>
             </span>
@@ -341,7 +341,7 @@ function AuditSection() {
       ) : log.isLoading ? (
         <Spinner />
       ) : (
-        <ul className="max-h-72 divide-y divide-white/5 overflow-y-auto rounded-xl bg-ink-900 text-2xs">
+        <ul className="max-h-72 divide-y divide-line overflow-y-auto rounded-xl bg-ink-900 text-2xs">
           {(log.data ?? []).map((e) => (
             <li key={e.id} className="px-3 py-1.5">
               <span className="text-muted">{dateTime(e.ts)}</span> · {e.entity} {e.entity_id ? `#${e.entity_id}` : ""} · <span className="font-semibold">{e.action}</span>

@@ -28,6 +28,5 @@ Holdings are snapshots (broker + stock + quantity + average cost) entered by han
 
 - Verified live: Alpaca, ECB + ExchangeRate-API FX, Longbridge dividends and earnings dates, Gemini, Groq. Not yet: Longbridge quotes (websocket, needs the PC) and Yahoo.
 - Bursa dividend/earnings dates are manual (no free source).
-- Visual theme to be revisited.
 
 Next steps and the full parked list: `docs/HANDOFF.md`. Prompt for the next session: `docs/KICKSTART_PROMPT.md`.
