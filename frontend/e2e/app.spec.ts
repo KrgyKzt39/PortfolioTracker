@@ -160,8 +160,10 @@ test.describe.serial("portfolio flow", () => {
     await d.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("EPF added")).toBeVisible();
     const epf = page.getByRole("button", { name: "EPF details" });
-    await expect(epf).toContainText("85,000 balance");
-    await expect(epf).toContainText("+RM15,000.00");
+    await expect(epf).toContainText("RM85,000");
+    await expect(epf).toContainText("+RM15,000"); // table rounds to whole units from 1,000
+    await epf.click();
+    await expect(page.getByText("+RM15,000.00").first()).toBeVisible(); // details keep cents
   });
 
   test("dashboard shows the split and starts the value history", async ({ page }) => {
@@ -233,7 +235,7 @@ test.describe.serial("portfolio flow", () => {
     await page.getByRole("button", { name: "Hide values" }).click();
     await expect(page.getByTestId("total-value")).toContainText("••••");
     await page.getByRole("button", { name: "Show values" }).click();
-    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(dialog(page).getByText("Price sources")).toBeVisible();
     await expect(dialog(page).getByText("Moomoo")).toBeVisible();
     await dialog(page).getByRole("button", { name: "Backup now" }).click();
@@ -241,5 +243,28 @@ test.describe.serial("portfolio flow", () => {
     await dialog(page).getByRole("button", { name: "Close" }).click();
     await page.reload();
     await expect(page.getByRole("button", { name: "1155.KL details" })).toBeVisible();
+  });
+
+  test("appearance follows the device, and can be set to light or dark", async ({ page }) => {
+    const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/");
+    expect(await theme()).toBe("dark");
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect.poll(theme).toBe("light"); // Auto tracks the phone's setting live
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await dialog(page).getByRole("radio", { name: "Dark" }).click();
+    expect(await theme()).toBe("dark");
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(bg).toBe("rgb(0, 0, 0)");
+    await page.reload();
+    expect(await theme()).toBe("dark"); // remembered on this device, even though the device is light
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await dialog(page).getByRole("radio", { name: "Auto" }).click();
+    expect(await theme()).toBe("light");
+    for (const width of [375, 430]) {
+      await page.setViewportSize({ width, height: 860 });
+      await noHorizontalScroll(page);
+    }
   });
 });

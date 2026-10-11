@@ -12,7 +12,7 @@ export const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
 
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   return (
-    <nav aria-label="Main" className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/90 backdrop-blur-xl">
+    <nav aria-label="Main" className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/90 backdrop-blur-xl">
       <ul className="mx-auto flex max-w-[640px] px-1.5 pt-1.5">
         {TABS.map(({ id, label, icon: Icon }) => {
           const active = id === tab;

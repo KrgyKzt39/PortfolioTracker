@@ -3,6 +3,7 @@ import { BottomNav, TABS, type Tab } from "./components/BottomNav";
 import { BrokerSheet, CategorySheet, DividendSheet, EarningsSheet, HoldingSheet, ImportSheet, PaymentSheet, PriceSheet, StockSheet } from "./components/forms";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { setCurrencies } from "./lib/format";
+import { useTheme } from "./lib/theme";
 import { PrivacyCtx, SheetCtx, useMeta, useSettings, type SheetRequest } from "./lib/hooks";
 import { Ask } from "./pages/Ask";
 import { Calendar } from "./pages/Calendar";
@@ -20,6 +21,7 @@ export default function App() {
   const [sheets, setSheets] = useState<SheetRequest[]>([]);
   const settings = useSettings();
   const meta = useMeta();
+  useTheme(); // keeps "Auto" in step with the phone's light/dark setting
   if (meta.data) setCurrencies(meta.data.currencies);
   const [hidden, setHidden] = useState<boolean | null>(null);
 

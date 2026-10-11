@@ -10,12 +10,12 @@ import { TickerBadge } from "../components/TickerBadge";
 import { Arrange } from "../components/Arrange";
 
 const STATUS_STYLE: Record<PriceStatus, string> = {
-  Live: "bg-green-50 text-green-700",
-  Delayed: "bg-amber-50 text-amber-700",
+  Live: "bg-up-soft text-up",
+  Delayed: "bg-gold-soft text-gold",
   Cached: "bg-ink-100 text-fg2",
-  Manual: "bg-sky-50 text-sky-700",
-  Unavailable: "bg-red-50 text-red-700",
-  Partial: "bg-amber-50 text-amber-700",
+  Manual: "bg-accent-soft text-accent",
+  Unavailable: "bg-down-soft text-down",
+  Partial: "bg-gold-soft text-gold",
 };
 const PRICE_WORD: Record<PriceStatus, string> = {
   Live: "Live",
@@ -68,7 +68,7 @@ export function Dashboard() {
         <Arrange data={data} onDone={() => setArranging(false)} />
       ) : (
         <>
-          <div className="flex gap-2 px-1">
+          <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => open({ kind: "holding" })}>
               <Plus className="h-4 w-4" /> Add
             </Button>
@@ -123,12 +123,12 @@ function Hero({ data }: { data: Portfolio }) {
   return (
     <section
       aria-label="Portfolio summary"
-      className="relative overflow-hidden rounded-[20px] bg-white px-5 pb-4 pt-5 shadow-card"
+      className="relative overflow-hidden rounded-[20px] bg-surface px-5 pb-4 pt-5 shadow-card"
     >
       <div className="flex items-center justify-between gap-2">
         <h1 className="whitespace-nowrap text-[15px] font-medium text-muted">Total portfolio value</h1>
         <div className="flex items-center gap-1.5">
-          {data.demo && <Badge className="bg-amber-50 text-amber-700">DEMO</Badge>}
+          {data.demo && <Badge className="bg-gold-soft text-gold">DEMO</Badge>}
           <span title={STATUS_HELP[data.price_status]} className={cn("rounded-full px-2.5 py-1 text-[12px] font-semibold", STATUS_STYLE[data.price_status])} data-testid="price-status">
             {refreshing ? "Updating…" : data.price_status}
           </span>
@@ -156,11 +156,10 @@ function Hero({ data }: { data: Portfolio }) {
         ))}
       </p>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-[12px] text-muted">
-          {shortStamp(data.prices_as_of ?? data.generated_at)}
-        </p>
-        <div className="flex shrink-0 items-center gap-1">
+      <p className="mt-1 text-[11.5px] text-muted">Prices as of {shortStamp(data.prices_as_of ?? data.generated_at)}</p>
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
+        <div className="flex items-center gap-1">
           <label className="sr-only" htmlFor="base-ccy">
             Base currency
           </label>
@@ -180,12 +179,14 @@ function Hero({ data }: { data: Portfolio }) {
           <IconButton label="Settings" onClick={() => open({ kind: "settings" })} className="h-8 w-8 text-muted">
             <Gear className="h-[18px] w-[18px]" />
           </IconButton>
+        </div>
+        <div className="flex items-center">
           <Button variant="pill" onClick={refresh} loading={refreshing} className="px-3.5 py-1.5">
             {!refreshing && <RefreshCw className="h-4 w-4" />} Refresh
           </Button>
         </div>
       </div>
-      {t.incomplete && <p className="mt-2 text-2xs text-amber-700/90">Totals exclude holdings without a price or FX rate.</p>}
+      {t.incomplete && <p className="mt-2 text-2xs text-gold/90">Totals exclude holdings without a price or FX rate.</p>}
     </section>
   );
 }
@@ -209,14 +210,14 @@ function chunk<T>(arr: T[], n: number): T[][] {
 function Warnings({ items }: { items: string[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-2xl bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+    <div className="rounded-2xl bg-gold-soft px-4 py-2.5 text-xs text-gold">
       <button className="flex w-full items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
         <span className="flex-1">{items.length} data warning{items.length > 1 ? "s" : ""}</span>
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <ul className="mt-2 list-disc space-y-0.5 pl-6 text-amber-700/80">
+        <ul className="mt-2 list-disc space-y-0.5 pl-6 text-gold/80">
           {items.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -236,7 +237,7 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3 px-5 pb-3.5 pt-4">
+      <div className="flex items-start justify-between gap-3 px-4 pb-3.5 pt-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <h2 className="truncate text-[15px] font-semibold text-fg2">{c.name}</h2>
@@ -246,7 +247,7 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
               </IconButton>
             )}
           </div>
-          <p className="tabular truncate text-[24px] font-bold leading-tight tracking-tight text-fg">{money(c.value, base, { hidden })}</p>
+          <p className="tabular truncate text-[22px] font-bold leading-tight tracking-tight text-fg">{money(c.value, base, { hidden })}</p>
           <p className={cn("tabular mt-0.5 flex gap-3 whitespace-nowrap text-[14px] font-semibold", tone(c.pl))}>
             <span>{money(c.pl, base, { signed: true, hidden })}</span>
             <span>{pct(c.pl_pct, { signed: true })}</span>
@@ -254,15 +255,15 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
         </div>
         {isDiv && (
           <div className="shrink-0 text-right">
-            <p className="text-[12px] text-muted">Est. Annual DV</p>
-            <p className="tabular whitespace-nowrap text-[20px] font-bold leading-tight text-gold">{money(c.est_annual_dividend, base, { hidden })}</p>
-            <p className="tabular text-[14px] font-semibold text-gold/90">{pct(c.dividend_yield)}</p>
+            <p className="text-[12px] text-muted">Est. yearly dividend</p>
+            <p className="tabular whitespace-nowrap text-[17px] font-bold leading-tight text-gold">{money(c.est_annual_dividend, base, { hidden })}</p>
+            <p className="tabular text-[13px] font-semibold text-gold/90">{pct(c.dividend_yield)}</p>
           </div>
         )}
       </div>
-      <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-1.5 whitespace-nowrap border-y border-line bg-ink-50 px-2.5 py-2 text-[10px] font-medium text-faint" role="row">
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.08fr)_minmax(0,1.08fr)_minmax(0,1.04fr)] gap-1.5 whitespace-nowrap border-y border-line bg-ink-50 px-2.5 py-2 text-[10px] font-medium text-faint" role="row">
         {cols.map((col, i) => (
-          <span key={col} className={i === 0 ? "pl-[46px] text-left" : "text-center"} role="columnheader">
+          <span key={col} className={i === 0 ? "pl-[42px] text-left" : "text-center"} role="columnheader">
             {col}
           </span>
         ))}
@@ -273,14 +274,14 @@ function CategoryCardView({ card: c, base }: { card: CategoryCard; base: string 
           <HoldingRow key={h.instrument_id} h={h} isDiv={isDiv} hidden={hidden} base={base} expanded={expanded === h.instrument_id} onToggle={() => setExpanded(expanded === h.instrument_id ? null : h.instrument_id)} />
         ))}
       </ul>
-      {c.incomplete && <p className="border-t border-line px-5 py-2 text-2xs text-amber-700/80">Stocks without a price are left out of this total.</p>}
+      {c.incomplete && <p className="border-t border-line px-5 py-2 text-2xs text-gold/80">Stocks without a price are left out of this total.</p>}
     </Card>
   );
 }
 
 function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding; isDiv: boolean; hidden: boolean; base: string; expanded: boolean; onToggle: () => void }) {
   const ccy = h.currency;
-  const unit = h.kind === "fund" ? (Number(h.price) === 1 ? "balance" : "units") : "shares";
+  const unit = h.kind === "fund" ? (Number(h.price) === 1 ? "" : "units") : "shares";
   return (
     <li className="border-b border-line last:border-b-0">
       <button
@@ -288,39 +289,39 @@ function HoldingRow({ h, isDiv, hidden, base, expanded, onToggle }: { h: Holding
         onClick={onToggle}
         aria-expanded={expanded}
         aria-label={`${h.symbol} details`}
-        className="grid w-full grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-center gap-1.5 whitespace-nowrap px-2.5 py-3 text-left transition-colors hover:bg-ink-50"
+        className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1.08fr)_minmax(0,1.08fr)_minmax(0,1.04fr)] items-center gap-1.5 whitespace-nowrap px-2.5 py-3 text-left transition-colors hover:bg-ink-50"
       >
         <span className="flex min-w-0 items-center gap-1.5">
-          <TickerBadge symbol={h.symbol} className="h-[28px] w-[40px]" />
+          <TickerBadge symbol={h.symbol} className="h-[30px] w-[36px]" />
           <span className="min-w-0">
             <span className="block truncate text-[13.5px] font-bold text-fg">{h.symbol}</span>
-            <span className="tabular block truncate text-[11px] text-muted">
-              {qty(h.quantity)} {unit}
+            <span className="tabular block truncate text-[10.5px] text-muted">
+              {unit ? `${qty(h.quantity)} ${unit}` : money(h.quantity, ccy, { hidden, compact: true })}
             </span>
           </span>
         </span>
         <span className="tabular text-center">
-          <span className={cn("block text-[11.5px] font-bold", tone(h.total_pl))}>{money(h.total_pl, ccy, { signed: true, hidden })}</span>
+          <span className={cn("block text-[11.5px] font-bold", tone(h.total_pl))}>{money(h.total_pl, ccy, { signed: true, hidden, compact: true })}</span>
           <span className={cn("block text-[10.5px] font-semibold", tone(h.total_pl))}>{pct(h.pl_pct, { signed: true })}</span>
         </span>
         {isDiv ? (
           <>
             <span className="tabular text-center">
-              <span className={cn("block text-[11.5px] font-bold", tone(h.gain))}>{money(h.gain, ccy, { signed: true, hidden })}</span>
-              <span className="block text-[10.5px] font-semibold text-up">{money(h.dividends_net, ccy, { signed: true, hidden })}</span>
+              <span className={cn("block text-[11.5px] font-bold", tone(h.gain))}>{money(h.gain, ccy, { signed: true, hidden, compact: true })}</span>
+              <span className="block text-[10.5px] font-semibold text-up">{money(h.dividends_net, ccy, { signed: true, hidden, compact: true })}</span>
             </span>
             <span className="tabular text-center">
               <PriceCell h={h} />
-              <span className="block text-[11px] text-muted">{h.kind === "fund" && h.dividend_yield ? `${pct(h.dividend_yield)} yield` : `${priceStr(h.avg_cost, ccy)} avg`}</span>
+              <span className="block text-[10.5px] text-muted">{h.kind === "fund" && h.dividend_yield ? `${pct(h.dividend_yield)} yield` : priceStr(h.avg_cost, ccy)}</span>
             </span>
           </>
         ) : (
           <>
             <span className="tabular text-center">
               <PriceCell h={h} />
-              <span className="block text-[11px] text-muted">{priceStr(h.avg_cost, ccy)} avg</span>
+              <span className="block text-[10.5px] text-muted">{priceStr(h.avg_cost, ccy)}</span>
             </span>
-            <span className="tabular text-center text-[11.5px] font-bold text-fg">{money(h.market_value, ccy, { hidden })}</span>
+            <span className="tabular text-center text-[11.5px] font-bold text-fg">{money(h.market_value, ccy, { hidden, compact: true })}</span>
           </>
         )}
       </button>
@@ -333,7 +334,7 @@ function PriceCell({ h }: { h: Holding }) {
   return (
     <span className="block text-[11.5px] font-bold text-fg" title={`${PRICE_WORD[h.price_status]}${h.price_source ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${h.price_date}` : ""}`}>
       {priceStr(h.price, h.currency)}
-      {(h.price_status === "Cached" || h.price_status === "Unavailable") && <span className="ml-0.5 align-super text-[9px] text-amber-700">•</span>}
+      {(h.price_status === "Cached" || h.price_status === "Unavailable") && <span className="ml-0.5 align-super text-[9px] text-gold">•</span>}
     </span>
   );
 }
@@ -352,7 +353,7 @@ function HoldingDetail({ h, base, hidden }: { h: Holding; base: string; hidden: 
   if (c !== base) rows.push([`Value in ${base}`, m(h.market_value_base, false, base)]);
   rows.push(["Price", `${PRICE_WORD[h.price_status]}${h.price_source && h.price_source !== "manual" ? ` · ${h.price_source}` : ""}${h.price_date ? ` · ${shortDate(h.price_date)}` : ""}`]);
   return (
-    <div className="bg-ink-50 px-5 pb-4 pt-1">
+    <div className="bg-ink-50 px-4 pb-4 pt-1">
       {h.name && <p className="pb-2 text-xs text-muted">{h.name}</p>}
       <dl className="grid grid-cols-1 gap-y-1.5 text-[13px]">
         {rows.map(([k, v, cls]) => (
@@ -363,7 +364,7 @@ function HoldingDetail({ h, base, hidden }: { h: Holding; base: string; hidden: 
         ))}
       </dl>
       <p className="mt-3 text-[12px] font-semibold text-muted">Held at</p>
-      <ul className="mt-1 divide-y divide-line rounded-xl bg-white">
+      <ul className="mt-1 divide-y divide-line rounded-xl bg-surface">
         {h.lots.map((l) => (
           <li key={l.holding_id}>
             <button className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] hover:bg-ink-50" onClick={() => open({ kind: "holding", holdingId: l.holding_id })} aria-label={`Edit ${h.symbol} at ${l.broker}`}>

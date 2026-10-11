@@ -11,7 +11,7 @@ import { Button, ConfirmSheet, Field, Input, Segmented, Select, Sheet, Spinner, 
 export function FormError({ error }: { error: string | null | undefined }) {
   if (!error) return null;
   return (
-    <p role="alert" className="rounded-xl border border-down/30 bg-down/10 px-3 py-2 text-sm text-red-700">
+    <p role="alert" className="rounded-xl border border-down/30 bg-down/10 px-3 py-2 text-sm text-down">
       {error}
     </p>
   );
@@ -711,7 +711,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
                 {s.errors > 0 && <span className="text-down"> · {s.errors} with errors</span>}
               </p>
               {s.removed.length > 0 && (
-                <p className="mt-1 text-amber-700">
+                <p className="mt-1 text-gold">
                   Will remove from {brokerName ?? "this broker"}: {s.removed.map((r) => r.symbol).join(", ")}
                 </p>
               )}

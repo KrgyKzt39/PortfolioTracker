@@ -5,11 +5,11 @@ import { cn } from "../../lib/format";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "pill";
 const variants: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:bg-blue-800 active:bg-blue-900",
-  secondary: "bg-white text-fg shadow-card hover:bg-ink-50",
+  primary: "bg-accent text-white hover:brightness-110 active:brightness-95",
+  secondary: "bg-surface text-fg shadow-card hover:bg-ink-50",
   ghost: "text-accent hover:bg-accent-soft",
-  danger: "bg-red-50 text-down hover:bg-red-100",
-  pill: "rounded-full bg-accent-soft text-accent hover:bg-blue-100",
+  danger: "bg-down-soft text-down hover:bg-down/20",
+  pill: "rounded-full bg-accent-soft text-accent hover:bg-accent/15",
 };
 
 export function Button({ variant = "primary", loading, className, children, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; loading?: boolean }) {
@@ -53,7 +53,7 @@ export function Spinner({ label = "Loading" }: { label?: string }) {
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const msg = error instanceof Error ? error.message : String(error);
   return (
-    <div role="alert" className="m-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+    <div role="alert" className="m-4 rounded-2xl border border-down-soft bg-down-soft p-4 text-sm text-down">
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <div className="flex-1">{msg}</div>
@@ -68,7 +68,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("overflow-hidden rounded-[20px] bg-white shadow-card", className)}>{children}</section>;
+  return <section className={cn("overflow-hidden rounded-[20px] bg-surface shadow-card", className)}>{children}</section>;
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
@@ -104,7 +104,7 @@ export function Field({ label, error, hint, children, className }: { label: stri
 }
 
 const inputCls =
-  "w-full rounded-xl border border-transparent bg-ink-900 px-3 py-2.5 text-[16px] text-fg placeholder:text-faint focus:border-accent focus:bg-white focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60";
+  "w-full rounded-xl border border-transparent bg-ink-900 px-3 py-2.5 text-[16px] text-fg placeholder:text-faint focus:border-accent focus:bg-surface focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputCls, props.className)} />;
@@ -142,7 +142,7 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cn("flex-1 rounded-[8px] px-2 py-1.5 text-xs font-semibold transition-colors", value === o.value ? "bg-white text-fg shadow-[0_1px_3px_rgba(15,23,42,0.12)]" : "text-muted hover:text-fg2")}
+          className={cn("flex-1 rounded-[8px] px-2 py-1.5 text-xs font-semibold transition-colors", value === o.value ? "bg-surface text-fg shadow-[0_1px_3px_rgba(15,23,42,0.12)] dark:bg-ink-600" : "text-muted hover:text-fg2")}
         >
           {o.label}
         </button>
@@ -170,7 +170,7 @@ export function Sheet({ open, onClose, title, children, footer, wide }: { open: 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="presentation">
-      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
         ref={ref}
         tabIndex={-1}
@@ -178,7 +178,7 @@ export function Sheet({ open, onClose, title, children, footer, wide }: { open: 
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative flex max-h-[92dvh] w-full flex-col rounded-t-[22px] bg-white shadow-2xl focus:outline-none sm:rounded-[26px]",
+          "relative flex max-h-[92dvh] w-full flex-col rounded-t-[22px] bg-surface shadow-2xl focus:outline-none sm:rounded-[26px]",
           wide ? "sm:max-w-2xl" : "sm:max-w-lg",
         )}
       >
@@ -216,9 +216,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={cn(
               "pointer-events-auto flex max-w-md items-start gap-2 rounded-2xl border px-4 py-3 text-sm shadow-xl",
-              t.kind === "success" && "border-green-100 bg-white text-emerald-700",
-              t.kind === "error" && "border-red-100 bg-white text-red-700",
-              t.kind === "info" && "border-line bg-white text-fg",
+              t.kind === "success" && "border-up-soft bg-surface text-up",
+              t.kind === "error" && "border-down-soft bg-surface text-down",
+              t.kind === "info" && "border-line bg-surface text-fg",
             )}
           >
             {t.kind === "success" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : t.kind === "error" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <Info className="mt-0.5 h-4 w-4 shrink-0" />}

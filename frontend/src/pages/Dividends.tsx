@@ -1,4 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { chartColors, useTheme } from "../lib/theme";
 import { Check, Plus } from "lucide-react";
 import { money, monthLabel, pct, shortDate } from "../lib/format";
 import { useDividendSummary, useOpenSheet, usePrivacy } from "../lib/hooks";
@@ -6,9 +7,6 @@ import type { DividendSummary } from "../lib/types";
 import { Button, Card, Empty, ErrorBox, Spinner } from "../components/ui";
 import { TickerBadge } from "../components/TickerBadge";
 
-// Received = confirmed income (green), expected = estimate (amber); both readable on white.
-const RECEIVED = "#16A34A";
-const EXPECTED = "#F59E0B";
 
 export function Dividends() {
   const s = useDividendSummary();
@@ -23,12 +21,12 @@ export function Dividends() {
     <div className="space-y-4">
       <div className="flex items-center justify-between px-1">
         <h1 className="text-[28px] font-bold tracking-tight text-fg">Dividends</h1>
-        <Button variant="secondary" onClick={() => open({ kind: "payment" })}>
-          <Plus className="h-4 w-4" /> Record
+        <Button variant="secondary" className="rounded-full px-3 py-1.5 text-[13px]" onClick={() => open({ kind: "payment" })}>
+          <Plus className="h-3.5 w-3.5" /> Record
         </Button>
       </div>
 
-      <section className="rounded-[20px] bg-white p-5 shadow-card">
+      <section className="rounded-[20px] bg-surface p-5 shadow-card">
         <p className="text-[15px] font-medium text-muted">Expected per year</p>
         <p className="tabular mt-1 text-[34px] font-bold leading-tight tracking-tight text-fg">{m(d.forward_annual_estimate)}</p>
         <p className="tabular text-sm text-muted">
@@ -109,14 +107,16 @@ export function Dividends() {
 }
 
 function MonthlyChart({ d, hidden }: { d: DividendSummary; hidden: boolean }) {
+  // Received = confirmed income (green), expected = estimate (amber).
+  const cc = chartColors(useTheme().dark);
   const data = d.chart.map((c) => ({ month: c.month, label: monthLabel(c.month), received: Number(c.received), expected: Number(c.expected) }));
   const has = data.some((x) => x.received || x.expected);
   return (
     <Card>
       <h2 className="px-5 pb-1 pt-4 text-[15px] font-semibold text-fg">Month by month</h2>
       <div className="flex gap-4 px-5 pb-2 text-2xs text-muted">
-        <Legend color={RECEIVED} label="Received" />
-        <Legend color={EXPECTED} label="Expected" />
+        <Legend color={cc.received} label="Received" />
+        <Legend color={cc.expected} label="Expected" />
       </div>
       {!has ? (
         <Empty title="No dividends yet">Confirm a dividend when it arrives, or add upcoming ones on the Calendar tab.</Empty>
@@ -124,18 +124,18 @@ function MonthlyChart({ d, hidden }: { d: DividendSummary; hidden: boolean }) {
         <div className="h-52 px-2 pb-3" role="img" aria-label="Dividends received over the last 12 months and expected over the next 12 months">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap={2}>
-              <CartesianGrid vertical={false} stroke="#E8ECF2" />
-              <XAxis dataKey="label" tick={{ fill: "#94A3B8", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "#E8ECF2" }} interval={2} />
-              <YAxis tick={{ fill: "#94A3B8", fontSize: 10 }} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => (hidden ? "" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)))} />
+              <CartesianGrid vertical={false} stroke={cc.grid} />
+              <XAxis dataKey="label" tick={{ fill: cc.axis, fontSize: 10 }} tickLine={false} axisLine={{ stroke: cc.grid }} interval={2} />
+              <YAxis tick={{ fill: cc.axis, fontSize: 10 }} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => (hidden ? "" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)))} />
               <Tooltip
-                cursor={{ fill: "#0F172A", fillOpacity: 0.04 }}
-                contentStyle={{ background: "#FFFFFF", border: "1px solid #E8ECF2", borderRadius: 12, fontSize: 12, boxShadow: "0 6px 20px rgba(15,23,42,0.08)" }}
-                labelStyle={{ color: "#0F172A" }}
+                cursor={{ fill: cc.axis, fillOpacity: 0.12 }}
+                contentStyle={{ background: cc.tipBg, border: `1px solid ${cc.tipBorder}`, borderRadius: 12, fontSize: 12, color: cc.tipText, boxShadow: "0 6px 20px rgba(0,0,0,0.12)" }}
+                labelStyle={{ color: cc.tipText }}
                 labelFormatter={(_, p) => (p?.[0]?.payload?.month as string) ?? ""}
                 formatter={(v, name) => [money(Number(v), d.base_currency, { hidden }), name === "received" ? "Received" : "Expected"]}
               />
-              <Bar dataKey="received" stackId="m" fill={RECEIVED} radius={[4, 4, 0, 0]} maxBarSize={14} isAnimationActive={false} />
-              <Bar dataKey="expected" stackId="m" fill={EXPECTED} radius={[4, 4, 0, 0]} maxBarSize={14} isAnimationActive={false} />
+              <Bar dataKey="received" stackId="m" fill={cc.received} radius={[4, 4, 0, 0]} maxBarSize={14} isAnimationActive={false} />
+              <Bar dataKey="expected" stackId="m" fill={cc.expected} radius={[4, 4, 0, 0]} maxBarSize={14} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>

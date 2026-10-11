@@ -3,11 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f2f4f8" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#F2F4F8" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply light/dark before first paint (same rule as src/lib/theme.ts).
+      (function () {
+        var p = null;
+        try { p = localStorage.getItem("pt-theme"); } catch (e) {}
+        var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", dark ? "#000000" : "#F2F4F8");
+      })();
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Portfolio" />
     <meta name="description" content="Local-first investment portfolio tracker" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -15,7 +25,7 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>Portfolio Tracker</title>
   </head>
-  <body class="bg-ink-900">
+  <body class="bg-page">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

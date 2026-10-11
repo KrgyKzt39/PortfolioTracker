@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../lib/api";
+import { chartColors, useTheme } from "../lib/theme";
 import { cn, money, pct, shortDate, tone } from "../lib/format";
 import { usePortfolio, usePrivacy, useSettings } from "../lib/hooks";
 import type { Portfolio } from "../lib/types";
@@ -10,7 +11,6 @@ import { Card, Empty, ErrorBox, Segmented, Spinner } from "../components/ui";
 type Range = "1M" | "3M" | "6M" | "1Y" | "All";
 const DAYS: Record<Range, number> = { "1M": 31, "3M": 92, "6M": 183, "1Y": 366, All: 100000 };
 type By = "category" | "currency" | "broker";
-const LINE = "#1D4ED8";
 
 export function Overview() {
   const settings = useSettings();
@@ -33,6 +33,7 @@ export function Overview() {
 }
 
 function ValueChart({ data, history, loading }: { data: Portfolio; history: { date: string; value: string; pl: string }[]; loading: boolean }) {
+  const cc = chartColors(useTheme().dark);
   const { hidden } = usePrivacy();
   const [range, setRange] = useState<Range>("6M");
   const base = data.base_currency;
@@ -69,35 +70,35 @@ function ValueChart({ data, history, loading }: { data: Portfolio; history: { da
             <AreaChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={LINE} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={LINE} stopOpacity={0} />
+                  <stop offset="0%" stopColor={cc.line} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={cc.line} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} stroke="#E8ECF2" />
+              <CartesianGrid vertical={false} stroke={cc.grid} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#94A3B8", fontSize: 10 }}
+                tick={{ fill: cc.axis, fontSize: 10 }}
                 tickLine={false}
-                axisLine={{ stroke: "#E8ECF2" }}
+                axisLine={{ stroke: cc.grid }}
                 minTickGap={40}
                 tickFormatter={(d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
               />
               <YAxis
                 domain={["auto", "auto"]}
-                tick={{ fill: "#94A3B8", fontSize: 10 }}
+                tick={{ fill: cc.axis, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 width={44}
                 tickFormatter={(v: number) => (hidden ? "" : v >= 1e6 ? `${(v / 1e6).toFixed(1)}m` : v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))}
               />
               <Tooltip
-                cursor={{ stroke: "#94A3B8", strokeOpacity: 0.5 }}
-                contentStyle={{ background: "#FFFFFF", border: "1px solid #E8ECF2", borderRadius: 12, fontSize: 12, boxShadow: "0 6px 20px rgba(15,23,42,0.08)" }}
-                labelStyle={{ color: "#0F172A" }}
+                cursor={{ stroke: cc.axis, strokeOpacity: 0.6 }}
+                contentStyle={{ background: cc.tipBg, border: `1px solid ${cc.tipBorder}`, borderRadius: 12, fontSize: 12, color: cc.tipText, boxShadow: "0 6px 20px rgba(0,0,0,0.12)" }}
+                labelStyle={{ color: cc.tipText }}
                 labelFormatter={(d) => shortDate(String(d))}
                 formatter={(v) => [money(Number(v), base, { hidden }), "Value"]}
               />
-              <Area type="monotone" dataKey="value" stroke={LINE} strokeWidth={2} fill="url(#valueFill)" isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "#FFFFFF" }} />
+              <Area type="monotone" dataKey="value" stroke={cc.line} strokeWidth={2} fill="url(#valueFill)" isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: cc.dotRing }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -158,7 +159,7 @@ function Breakdown({ data }: { data: Portfolio }) {
                   <span className="font-semibold text-fg">{pct(r.share, { dp: 1 })}</span> · {money(r.value, base, { hidden })}
                 </span>
               </div>
-              <div className="mt-1.5 h-2 rounded-full bg-white/[0.06]" aria-hidden>
+              <div className="mt-1.5 h-2 rounded-full bg-ink-100" aria-hidden>
                 <div className="h-2 rounded-full bg-accent" style={{ width: `${max ? Math.max(2, (r.value / max) * 100) : 0}%` }} />
               </div>
             </li>

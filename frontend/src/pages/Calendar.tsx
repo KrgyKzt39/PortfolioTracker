@@ -35,15 +35,15 @@ export function Calendar() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between px-1">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 px-1">
         <h1 className="text-[28px] font-bold tracking-tight text-fg">Calendar</h1>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => open({ kind: "earnings" })}>
-            <Plus className="h-4 w-4" /> Earnings
+        <div className="flex shrink-0 gap-1.5">
+          <Button variant="secondary" className="rounded-full px-3 py-1.5 text-[13px]" onClick={() => open({ kind: "earnings" })}>
+            <Plus className="h-3.5 w-3.5" /> Earnings
           </Button>
-          <Button variant="secondary" onClick={() => open({ kind: "dividend" })}>
-            <Plus className="h-4 w-4" /> Dividend
+          <Button variant="secondary" className="rounded-full px-3 py-1.5 text-[13px]" onClick={() => open({ kind: "dividend" })}>
+            <Plus className="h-3.5 w-3.5" /> Dividend
           </Button>
         </div>
       </div>

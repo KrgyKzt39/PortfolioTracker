@@ -1,3 +1,4 @@
+import { setThemePref, useTheme } from "../lib/theme";
 import { useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
@@ -6,7 +7,7 @@ import { dateTime, num, today } from "../lib/format";
 import { CURRENCY_LIST } from "../lib/format";
 import { useBrokers, useCategories, useInvalidateAll, useMeta, useOpenSheet, useSaveSettings, useSettings } from "../lib/hooks";
 import type { AuditEntry, RefreshState, Settings } from "../lib/types";
-import { Button, ConfirmSheet, Field, Input, Select, Sheet, Spinner, Toggle, useToast } from "./ui";
+import { Button, ConfirmSheet, Field, Input, Segmented, Select, Sheet, Spinner, Toggle, useToast } from "./ui";
 import { Section } from "./forms";
 
 
@@ -23,6 +24,7 @@ function SettingsBody({ s }: { s: Settings }) {
   const save = useSaveSettings();
   const toast = useToast();
   const meta = useMeta();
+  const theme = useTheme();
   const openSheet = useOpenSheet();
   const brokers = useBrokers();
   const categories = useCategories();
@@ -45,6 +47,20 @@ function SettingsBody({ s }: { s: Settings }) {
             </Select>
           )}
         </Field>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">Appearance</span>
+          <Segmented
+            label="Appearance"
+            value={theme.pref}
+            onChange={setThemePref}
+            options={[
+              { value: "system", label: "Auto" },
+              { value: "light", label: "Light" },
+              { value: "dark", label: "Dark" },
+            ]}
+          />
+          <span className="text-2xs text-faint">Auto follows your phone or computer setting. Saved on this device only.</span>
+        </div>
         <Toggle checked={s.hide_values} onChange={(v) => update({ hide_values: v })} label="Hide values on open" description="Start with amounts masked (tap the eye icon to reveal)." />
       </Section>
 
@@ -73,7 +89,7 @@ function SettingsBody({ s }: { s: Settings }) {
           <details className="rounded-xl bg-ink-900 p-3 text-2xs text-muted">
             <summary className="cursor-pointer">Last refresh: {refresh.data.message}</summary>
             {Object.entries(refresh.data.errors).map(([k, v]) => (
-              <p key={k} className="mt-1 text-amber-700/80">
+              <p key={k} className="mt-1 text-gold/80">
                 {k}: {v}
               </p>
             ))}
@@ -305,7 +321,7 @@ function DataSection() {
               <a className="text-accent hover:underline" href={`/api/backups/${encodeURIComponent(b.name)}`}>
                 Download
               </a>
-              <button className="text-amber-700 hover:underline" onClick={() => setRestoreName(b.name)}>
+              <button className="text-gold hover:underline" onClick={() => setRestoreName(b.name)}>
                 Restore
               </button>
             </span>

@@ -1,27 +1,29 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Light, Apple-style surfaces. "ink" is the neutral surface scale (names kept from the first dark theme).
-        page: "#F2F4F8",
-        ink: { 50: "#F7F8FB", 100: "#EEF1F6", 600: "#E1E6EE", 700: "#EDF0F5", 750: "#F3F5F9", 800: "#FFFFFF", 850: "#FFFFFF", 900: "#F3F5F9", 950: "#E9EDF3" },
-        line: "#E8ECF2",
-        fg: "#0F172A",
-        fg2: "#334155",
-        muted: "#64748B",
-        faint: "#94A3B8",
-        up: "#15803D",
-        down: "#DC2626",
-        gold: "#B45309",
-        accent: { DEFAULT: "#1D4ED8", soft: "#E7EEFD" },
+        // Light and dark values live in src/index.css. "ink" is the neutral surface scale.
+        page: "rgb(var(--page) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        ink: { 50: "rgb(var(--ink-50) / <alpha-value>)", 100: "rgb(var(--ink-100) / <alpha-value>)", 600: "rgb(var(--ink-600) / <alpha-value>)", 700: "rgb(var(--ink-100) / <alpha-value>)", 750: "rgb(var(--ink-field) / <alpha-value>)", 800: "rgb(var(--surface) / <alpha-value>)", 850: "rgb(var(--surface) / <alpha-value>)", 900: "rgb(var(--ink-field) / <alpha-value>)", 950: "rgb(var(--ink-600) / <alpha-value>)" },
+        line: "rgb(var(--line) / <alpha-value>)",
+        fg: "rgb(var(--fg) / <alpha-value>)",
+        fg2: "rgb(var(--fg2) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        faint: "rgb(var(--faint) / <alpha-value>)",
+        up: { DEFAULT: "rgb(var(--up) / <alpha-value>)", soft: "rgb(var(--up-soft) / <alpha-value>)" },
+        down: { DEFAULT: "rgb(var(--down) / <alpha-value>)", soft: "rgb(var(--down-soft) / <alpha-value>)" },
+        gold: { DEFAULT: "rgb(var(--gold) / <alpha-value>)", soft: "rgb(var(--gold-soft) / <alpha-value>)" },
+        accent: { DEFAULT: "rgb(var(--accent) / <alpha-value>)", soft: "rgb(var(--accent-soft) / <alpha-value>)" },
       },
       boxShadow: {
-        card: "0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05)",
+        card: "var(--shadow-card)",
       },
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Inter", "Segoe UI", "Roboto", "sans-serif"],
+        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Inter Variable", "Inter", "Segoe UI", "Roboto", "sans-serif"],
       },
       fontSize: { "2xs": ["0.6875rem", "0.95rem"] },
     },

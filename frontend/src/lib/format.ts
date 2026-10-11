@@ -27,12 +27,13 @@ function toNum(v: string | number | null | undefined): number | null {
 export function money(
   v: string | number | null | undefined,
   ccy: string,
-  opts: { signed?: boolean; hidden?: boolean; dp?: number } = {},
+  opts: { signed?: boolean; hidden?: boolean; dp?: number; compact?: boolean } = {},
 ): string {
   const n = toNum(v);
   if (n === null) return "N/A";
   if (opts.hidden) return `${currencySymbol(ccy)}${HIDDEN}`;
-  const dp = opts.dp ?? 2;
+  // compact: whole units from 1,000 up, for narrow table cells (details still show cents)
+  const dp = opts.dp ?? (opts.compact && Math.abs(n) >= 1000 ? 0 : 2);
   const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   const rounded = Number(Math.abs(n).toFixed(dp));
   const sign = n < 0 && rounded !== 0 ? "-" : opts.signed && rounded !== 0 ? "+" : "";
@@ -63,8 +64,9 @@ export function num(v: string | number | null | undefined, dp = 4): string {
 export function priceStr(v: string | number | null | undefined, ccy: string): string {
   const n = toNum(v);
   if (n === null) return "N/A";
-  const dp = Math.abs(n) < 1 && n !== 0 ? 4 : 2;
-  return money(n, ccy, { dp });
+  if (Math.abs(n) >= 1 || n === 0) return money(n, ccy);
+  // sub-1 prices (e.g. Bursa penny stocks): up to 4 decimals, trailing zeros dropped (0.8200 -> 0.82)
+  return `${n < 0 ? "-" : ""}${currencySymbol(ccy)}${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 }
 
 /** Tailwind colour class for gains (green), losses (red) and unknowns (muted). */

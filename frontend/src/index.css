@@ -5,20 +5,71 @@
 :root {
   color-scheme: light;
   -webkit-text-size-adjust: 100%;
+  --page: 242 244 248;
+  --surface: 255 255 255;
+  --ink-50: 247 248 251;
+  --ink-100: 238 241 246;
+  --ink-600: 225 230 238;
+  --ink-field: 243 245 249;
+  --line: 232 236 242;
+  --fg: 15 23 42;
+  --fg2: 51 65 85;
+  --muted: 100 116 139;
+  --faint: 148 163 184;
+  --up: 21 128 61;
+  --up-soft: 227 246 233;
+  --down: 220 38 38;
+  --down-soft: 254 236 236;
+  --gold: 180 83 9;
+  --gold-soft: 253 243 220;
+  --accent: 29 78 216;
+  --accent-soft: 231 238 253;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
+}
+
+/* Dark: Apple's system dark palette (black page, #1C1C1E grouped cards). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: 0 0 0;
+  --surface: 28 28 30;
+  --ink-50: 36 36 39;
+  --ink-100: 44 44 46;
+  --ink-600: 58 58 60;
+  --ink-field: 44 44 46;
+  --line: 56 56 58;
+  --fg: 245 245 247;
+  --fg2: 209 209 214;
+  --muted: 152 152 159;
+  --faint: 110 110 115;
+  --up: 48 209 88;
+  --up-soft: 18 52 30;
+  --down: 255 105 97;
+  --down-soft: 62 22 20;
+  --gold: 255 179 64;
+  --gold-soft: 60 42 12;
+  --accent: 77 142 255;
+  --accent-soft: 24 40 74;
+  --shadow-card: none;
 }
 
 html,
 body {
-  background: #f2f4f8;
-  color: #0f172a;
+  background: rgb(var(--page));
+  color: rgb(var(--fg));
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
 }
 
 body {
-  font-feature-settings: "tnum" 1;
+  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1;
   -webkit-font-smoothing: antialiased;
-  letter-spacing: -0.005em;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.006em;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
 }
 
 .tabular {
@@ -41,7 +92,25 @@ body {
 }
 
 select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
 }
+
+/* Ticker badges: soft tint + strong text, light and dark. */
+.tk-0 { background: #e7eefd; color: #1d4ed8; }
+.tk-1 { background: #f1e9fe; color: #6d28d9; }
+.tk-2 { background: #fdf3dc; color: #a16207; }
+.tk-3 { background: #dff5f3; color: #0f766e; }
+.tk-4 { background: #e2f1fc; color: #0369a1; }
+.tk-5 { background: #fce8f3; color: #be185d; }
+.tk-6 { background: #e3f6e9; color: #15803d; }
+.tk-7 { background: #fdebe3; color: #c2410c; }
+[data-theme="dark"] .tk-0 { background: #1a2a4a; color: #8fb6ff; }
+[data-theme="dark"] .tk-1 { background: #2e1f4a; color: #c9a2ff; }
+[data-theme="dark"] .tk-2 { background: #3a2e10; color: #f3c95a; }
+[data-theme="dark"] .tk-3 { background: #123a3a; color: #6fe0e6; }
+[data-theme="dark"] .tk-4 { background: #13304a; color: #7cc4ff; }
+[data-theme="dark"] .tk-5 { background: #3d1f36; color: #f0a2e8; }
+[data-theme="dark"] .tk-6 { background: #163a26; color: #7ee2a8; }
+[data-theme="dark"] .tk-7 { background: #40231a; color: #ffab85; }
