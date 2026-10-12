@@ -276,3 +276,18 @@ def test_import_type_column_makes_funds_manual_priced(api, client):
     inst = {i["symbol"]: i for i in api.ok(client.get("/api/instruments"))}
     assert inst["ASB"]["kind"] == "fund" and inst["ASB"]["price_mode"] == "manual"
     assert inst["MSFT"]["kind"] == "stock"  # unknown type values are ignored
+
+
+def test_tailscale_address_detection(monkeypatch):
+    import json
+    import subprocess
+    from app import netinfo
+    assert netinfo.is_tailscale_ip("100.101.5.9") and not netinfo.is_tailscale_ip("100.20.1.1")
+    assert not netinfo.is_tailscale_ip("192.168.1.10")
+    status = {"MagicDNSSuffix": "tail1234.ts.net", "Self": {"DNSName": "my-pc.tail1234.ts.net.", "TailscaleIPs": ["100.88.1.2", "fd7a::1"]}}
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/tailscale")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=json.dumps(status)))
+    assert netinfo.tailscale_addresses() == ["my-pc", "100.88.1.2"]
+    monkeypatch.setattr("shutil.which", lambda name: None)  # not installed
+    monkeypatch.setattr(netinfo.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("192.168.1.4", 0))])
+    assert netinfo.tailscale_addresses() == []

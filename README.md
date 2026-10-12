@@ -124,6 +124,6 @@ backend/app/api.py          HTTP API
 frontend/src/pages/         Dashboard (Portfolio), Dividends, Calendar
 ```
 
-## Optional: secure remote access (not implemented)
+## Access away from home (Tailscale)
 
-If you later want access away from home, the simplest safe option is a private mesh VPN such as **Tailscale** on the PC and iPhone: the app stays bound to your private network, nothing is exposed publicly, and Tailscale can issue an HTTPS certificate for the PC's tailnet name (which also enables full PWA features). Avoid router port-forwarding: the app has no authentication. If you ever need public exposure, put it behind a reverse proxy with HTTPS and authentication (e.g. Caddy with basic auth or an identity-aware proxy) first.
+Install Tailscale (free) on the PC and the iPhone, signed in to the same account, and the app opens from anywhere at an address like `http://my-pc:8000`, on your devices only. Step-by-step: [docs/TAILSCALE.md](docs/TAILSCALE.md). The start window and Settings → iPhone access show the address once Tailscale is running. Avoid router port-forwarding: the app has no authentication. If you ever need public exposure, put it behind a reverse proxy with HTTPS and authentication (e.g. Caddy with basic auth or an identity-aware proxy) first.

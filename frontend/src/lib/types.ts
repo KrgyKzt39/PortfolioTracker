@@ -208,6 +208,7 @@ export interface Meta {
   demo: boolean;
   db_path: string;
   lan_urls: string[];
+  tailscale_urls?: string[];
   alphavantage_configured: boolean;
   alpaca_configured: boolean;
   longbridge_configured: boolean;

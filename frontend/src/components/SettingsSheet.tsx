@@ -182,6 +182,11 @@ function SettingsBody({ s }: { s: Settings }) {
           ) : (
             <p>LAN access is off. Set PT_HOST=0.0.0.0 in .env and restart start.bat to open the app from your iPhone.</p>
           )}
+          {!!meta.data?.tailscale_urls?.length && (
+            <p>
+              From anywhere (Tailscale on): {meta.data.tailscale_urls.map((u) => <code key={u} className="mr-2 text-accent">{u}</code>)}
+            </p>
+          )}
           <p>In Safari: Share → Add to Home Screen. Over plain HTTP the app works normally; offline caching and some PWA features need HTTPS.</p>
         </div>
       </Section>

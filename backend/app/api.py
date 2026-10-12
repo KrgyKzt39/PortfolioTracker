@@ -61,10 +61,11 @@ def health(db: Session = DB):
 
 @router.get("/meta")
 def meta():
-    from .netinfo import lan_addresses
+    from .netinfo import lan_addresses, tailscale_addresses
     from .currencies import ALL
     return {"currencies": [{"code": c, "name": n, "symbol": s} for c, (n, s) in ALL.items()], "demo": config.DEMO, "db_path": config.DB_PATH.name,
             "lan_urls": [f"http://{ip}:{config.PORT}" for ip in lan_addresses()] if config.HOST in ("0.0.0.0", "") else [],
+            "tailscale_urls": [f"http://{h}:{config.PORT}" for h in tailscale_addresses()] if config.HOST in ("0.0.0.0", "") else [],
             "alphavantage_configured": bool(config.ALPHAVANTAGE_API_KEY),
             "alpaca_configured": config.alpaca_configured(), "longbridge_configured": config.longbridge_configured(),
             "ai_providers": ai.available()}

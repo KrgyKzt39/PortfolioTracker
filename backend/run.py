@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import uvicorn  # noqa: E402
 
 from app import config  # noqa: E402
-from app.netinfo import lan_addresses  # noqa: E402
+from app.netinfo import lan_addresses, tailscale_addresses  # noqa: E402
 
 
 def banner():
@@ -25,6 +25,11 @@ def banner():
                 print(f"     http://{ip}:{config.PORT}")
         else:
             print(" No LAN address detected. Check that this PC is on Wi-Fi/Ethernet.")
+        ts = tailscale_addresses()
+        if ts:
+            print(" From anywhere with Tailscale on (see docs/TAILSCALE.md):")
+            for host in ts:
+                print(f"     http://{host}:{config.PORT}")
         print(" If the iPhone cannot connect: allow Python through Windows Firewall")
         print(" for PRIVATE networks only, and make sure your Wi-Fi is set to Private.")
         print(" Add to Home Screen: Safari > Share > Add to Home Screen.")
