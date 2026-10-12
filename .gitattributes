@@ -1,4 +1,2 @@
 *.bat text eol=crlf
 *.sh text eol=lf
-# Windows batch files need CRLF line endings (also applied to GitHub ZIP downloads).
-*.bat text eol=crlf
