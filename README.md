@@ -25,7 +25,7 @@ Requirements: [Python 3.11+](https://www.python.org/downloads/) (tick "Add to PA
 
 To try it with sample data first, run **`start-demo.bat`**. That uses a separate `data\demo.db`; your real data is never touched. The header shows a DEMO badge.
 
-After updating the code, run `start.bat --rebuild` to rebuild the UI.
+**Updating:** close the app window and double-click **`update.bat`**. It backs up your database to `data\backups\`, downloads the latest version from GitHub, keeps your `data\` folder and `.env`, rebuilds and restarts the app. (If you work from a git clone instead, `git pull` then `start.bat --rebuild`.)
 
 ### Add to iPhone Home Screen
 

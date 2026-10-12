@@ -35,7 +35,12 @@ if defined REBUILD (
   where npm >nul 2>nul || (echo Node.js 20+ is required to build the UI: https://nodejs.org/ & pause & exit /b 1)
   echo [3/4] Building the web app...
   pushd frontend
-  if not exist node_modules ( call npm install --no-audit --no-fund || (popd & echo npm install failed & pause & exit /b 1) )
+  rem Reinstall packages when package-lock.json changed (e.g. after update.bat).
+  fc /b package-lock.json node_modules\.installed-lock.json >nul 2>nul
+  if errorlevel 1 (
+    call npm install --no-audit --no-fund || (popd & echo npm install failed & pause & exit /b 1)
+    copy /y package-lock.json node_modules\.installed-lock.json >nul
+  )
   call npm run build || (popd & echo Build failed & pause & exit /b 1)
   popd
 ) else (
