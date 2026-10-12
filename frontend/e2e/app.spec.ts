@@ -25,7 +25,8 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByText("Add your holdings")).toBeVisible();
     await page.getByRole("button", { name: "Add holding" }).click();
     const d = dialog(page);
-    await d.getByLabel("Broker").fill("Rakuten Trade");
+    await d.getByLabel("Broker (optional)").selectOption("__new");
+    await d.getByLabel("New broker name").fill("Rakuten Trade");
     await d.getByLabel("Stock symbol").fill("1155.KL");
     await d.getByLabel("Quantity").fill("1000");
     await d.getByLabel(/Average cost/).fill("10.02");
@@ -57,7 +58,7 @@ test.describe.serial("portfolio flow", () => {
     await page.getByRole("button", { name: "1155.KL details" }).click();
     await page.getByRole("button", { name: "Another broker" }).click();
     const d = dialog(page);
-    await d.getByLabel("Broker").selectOption("__new");
+    await d.getByLabel("Broker (optional)").selectOption("__new");
     await d.getByLabel("New broker name").fill("Moomoo");
     await d.getByLabel("Quantity").fill("1000");
     await d.getByLabel(/Average cost/).fill("12");
@@ -71,11 +72,10 @@ test.describe.serial("portfolio flow", () => {
     await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "Upload" }).click();
     const d = dialog(page);
-    await d.getByLabel("Broker", { exact: true }).selectOption({ label: "Moomoo" });
     await d.getByLabel("Holdings file").setInputFiles({
       name: "moomoo.csv",
       mimeType: "text/csv",
-      buffer: Buffer.from("Code,Name,Qty,Avg Price\n1155.KL,Maybank,1000,12\nNVDA,NVIDIA,10,100\n"),
+      buffer: Buffer.from("Broker,Code,Name,Qty,Avg Price\nMoomoo,1155.KL,Maybank,1000,12\nMoomoo,NVDA,NVIDIA,10,100\n"),
     });
     await expect(d.getByText("1 new")).toBeVisible();
     await d.getByRole("button", { name: "Import" }).click();
@@ -181,7 +181,7 @@ test.describe.serial("portfolio flow", () => {
     await expect(page.getByRole("main").locator("li").getByText("MYR", { exact: true })).toBeVisible();
   });
 
-  test("AI: statement PDF goes through the normal preview, and Ask answers", async ({ page }) => {
+  test("AI: a broker screenshot goes through the normal preview, and Ask answers", async ({ page }) => {
     // The test server has no AI keys; the browser is told one exists and AI replies are mocked.
     await page.route("**/api/meta", async (route) => {
       const res = await route.fetch();
@@ -204,22 +204,21 @@ test.describe.serial("portfolio flow", () => {
     await page.goto("/#/portfolio");
     await page.getByRole("button", { name: "Upload" }).click();
     const d = dialog(page);
-    await d.getByLabel("Broker", { exact: true }).selectOption({ label: "Moomoo" });
-    await d.getByLabel("Holdings file").setInputFiles({ name: "statement.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
-    await expect(d.getByText(/Read 1 holding from the PDF/)).toBeVisible();
+    await d.getByLabel("Holdings file").setInputFiles({ name: "moomoo-positions.png", mimeType: "image/png", buffer: Buffer.from("\x89PNG fake screenshot") });
+    await expect(d.getByText(/Read 1 holding from the screenshot/)).toBeVisible();
     await d.getByRole("button", { name: "Import" }).click();
     await expect(page.getByText(/Imported: 1 new/)).toBeVisible();
     await expect(page.getByRole("button", { name: "5258.KL details" })).toBeVisible();
 
-    await page.getByRole("navigation").getByRole("button", { name: "AI assistant" }).click();
+    await page.getByRole("navigation").getByRole("button", { name: "AI Assistant" }).click();
     const a = page.getByRole("main");
     await a.getByRole("button", { name: /split by currency/ }).click();
     await expect(a.getByText("Most of your value is in MYR")).toBeVisible();
     expect(asked).toEqual([{ role: "user", content: "How is my money split by currency?" }]);
-    await expect(a.getByText(/not financial advice/)).toBeVisible();
+    await expect(page.getByText(/Not financial advice/)).toBeVisible();
     await noHorizontalScroll(page);
     await page.getByRole("navigation").getByRole("button", { name: "Calendar" }).click();
-    await page.getByRole("navigation").getByRole("button", { name: "AI assistant" }).click();
+    await page.getByRole("navigation").getByRole("button", { name: "AI Assistant" }).click();
     await expect(a.getByText("Most of your value is in MYR")).toBeVisible(); // kept when switching tabs
   });
 

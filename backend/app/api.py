@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from . import ai, backup, config, dividends
 from .db import get_session
-from .holdings import ValidationError, delete_holding, export_csv, process_import, save_holding, to_decimal
+from .holdings import NO_BROKER, ValidationError, delete_holding, export_csv, process_import, save_holding, to_decimal
 from .jsonutil import DecimalJSONResponse, DecimalRoute
 from .market import service as market
 from .models import (CURRENCIES, AuditLog, Broker, Category, DividendEvent, DividendPayment, EarningsDate, FxRate,
@@ -211,6 +211,8 @@ def create_broker(body: dict, db: Session = DB):
 @router.put("/brokers/{bid}")
 def update_broker(bid: int, body: dict, db: Session = DB):
     b = found(db.get(Broker, bid))
+    if b.name == NO_BROKER:
+        fail(ValidationError("This is where untagged holdings live; it can't be renamed."))
 
     def go():
         before = row_dict(b)
@@ -486,11 +488,11 @@ def ai_status():
 
 
 @router.post("/ai/statement")
-async def ai_statement(file: UploadFile = File(...)):
-    """Read holdings from a statement PDF. Returns rows for the normal import preview; saves nothing."""
-    content = await file.read()
+async def ai_statement(file: list[UploadFile] = File(...)):
+    """Read holdings from a statement PDF or broker-app screenshots. Returns rows for the normal import preview."""
+    files = [(await f.read(), f.filename or "upload") for f in file]
     try:
-        out = ai.extract_statement(content, file.filename or "statement.pdf")
+        out = ai.extract_statement(files)
     except ai.AIError as exc:
         fail(ValidationError(str(exc)))
     return out

@@ -117,3 +117,24 @@ def test_ask_uses_groq_with_snapshot_and_falls_back_to_gemini(api, keys, monkeyp
 def test_ask_needs_a_question(client, keys):
     r = client.post("/api/ai/ask", json={"messages": [{"role": "assistant", "content": "hi"}]})
     assert r.status_code == 422
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+JPG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+
+
+def test_screenshots_go_to_gemini_together(client, keys, monkeypatch):
+    seen = mock(monkeypatch, lambda req: gemini_reply(json.dumps({"holdings": [
+        {"symbol": "NVDA", "quantity": 100, "avg_cost": 121.33, "currency": "USD"}]})))
+    files = [("file", ("a.png", PNG, "image/png")), ("file", ("b.jpg", JPG, "image/jpeg"))]
+    d = client.post("/api/ai/statement", files=files).json()
+    assert [(r["symbol"], D(r["avg_cost"])) for r in d["rows"]] == [("NVDA", D("121.33"))]
+    parts = json.loads(seen[0].content)["contents"][0]["parts"]
+    assert [p["inline_data"]["mime_type"] for p in parts if "inline_data" in p] == ["image/png", "image/jpeg"]
+    assert "screenshots" in parts[-1]["text"]
+
+
+def test_screenshots_need_gemini(client, keys, monkeypatch):
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "")
+    r = client.post("/api/ai/statement", files={"file": ("a.png", PNG, "image/png")})
+    assert r.status_code == 422 and "GEMINI_API_KEY" in r.json()["detail"]["message"]

@@ -63,6 +63,18 @@ def get_or_create_instrument(db: Session, symbol: str, currency: str | None = No
     return inst, True
 
 
+NO_BROKER = "No broker"  # holdings not tagged to a broker live here; brokers are optional
+
+
+def default_broker(db: Session) -> Broker:
+    b = db.scalar(select(Broker).where(Broker.name == NO_BROKER))
+    if b is None:
+        b = Broker(name=NO_BROKER)
+        db.add(b)
+        db.flush()
+    return b
+
+
 def save_holding(db: Session, data: dict, holding: Holding | None = None) -> Holding:
     """Create or update. Adding a stock a broker already holds updates that holding."""
     qty = to_decimal(data.get("quantity", holding.quantity if holding else None), "quantity", positive=True)
@@ -75,9 +87,10 @@ def save_holding(db: Session, data: dict, holding: Holding | None = None) -> Hol
         cost = to_decimal(data.get("avg_cost", holding.avg_cost if holding else None), "avg_cost")
     if cost is None:
         raise ValidationError("average cost is required", "avg_cost")
-    broker = db.get(Broker, data.get("broker_id") or (holding.broker_id if holding else None))
+    bid = data["broker_id"] if "broker_id" in data else (holding.broker_id if holding else None)
+    broker = db.get(Broker, bid) if bid else default_broker(db)
     if broker is None:
-        raise ValidationError("choose a broker", "broker_id")
+        raise ValidationError("unknown broker", "broker_id")
     if holding is None:
         cat = data.get("category_id")
         if cat and db.get(Category, cat) is None:
@@ -188,7 +201,8 @@ def suggest_mapping(header: list[str]) -> dict[str, int | None]:
 
 def process_import(db: Session, content: bytes, filename: str, broker_id: int | None, mapping: dict | None,
                    mode: str, commit: bool) -> dict:
-    """mode 'replace': the file is the broker's full list (holdings not in it are removed).
+    """mode 'replace': the file is the full list (holdings not in it are removed) for the brokers it covers,
+    or for untagged holdings when no broker is given.
     mode 'merge': add or update only the rows in the file. Preview callers roll back the session."""
     if mode not in ("replace", "merge"):
         raise ValidationError("mode must be replace or merge")
@@ -197,8 +211,6 @@ def process_import(db: Session, content: bytes, filename: str, broker_id: int | 
     for f in ("symbol", "quantity", "avg_cost"):
         if mapping.get(f) is None:
             raise ValidationError(f"Choose which column holds {f.replace('_', ' ')}")
-    if broker_id is None and mapping.get("broker") is None:
-        raise ValidationError("Choose a broker, or a column that names the broker")
     fixed_broker = db.get(Broker, broker_id) if broker_id else None
     if broker_id and fixed_broker is None:
         raise ValidationError("unknown broker")
@@ -217,10 +229,10 @@ def process_import(db: Session, content: bytes, filename: str, broker_id: int | 
             continue
         try:
             broker = fixed_broker
-            if broker is None:
-                name = cell(r, "broker")
-                if not name:
-                    raise ValidationError("broker is empty")
+            name = cell(r, "broker") if broker is None else ""
+            if broker is None and not name:
+                broker = default_broker(db)
+            elif broker is None:
                 broker = brokers.get(name.lower())
                 if broker is None:
                     broker = Broker(name=name)

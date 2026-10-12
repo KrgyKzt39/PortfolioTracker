@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronRight, SquarePen } from "lucide-react";
+import { ArrowUp, Sparkles, SquarePen } from "lucide-react";
 import { api } from "../lib/api";
 import { useMeta } from "../lib/hooks";
-import { cn } from "../lib/format";
-import { Card, IconButton, PageHeader, Textarea } from "../components/ui";
+import { Card, IconButton, PageHeader } from "../components/ui";
 
 type Msg = { role: "user" | "assistant"; content: string };
 const PROVIDER: Record<string, string> = { gemini: "Google Gemini", groq: "Groq", custom: "your AI provider" };
@@ -23,7 +22,17 @@ export function Ask() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [msgs, busy]);
+  const box = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (msgs.length) end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [msgs, busy]);
+  useEffect(() => {
+    // grow the composer with its text, up to about six lines
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [text]);
 
   const send = async (q: string) => {
     q = q.trim();
@@ -44,77 +53,97 @@ export function Ask() {
   };
 
   const who = providers.map((p) => PROVIDER[p] ?? p).join(" or ");
+  if (!providers.length)
+    return (
+      <div className="space-y-4">
+        <PageHeader title="AI Assistant" />
+        <Card className="p-4 text-[15px] text-muted">
+          No AI provider is set up. Add GEMINI_API_KEY or GROQ_API_KEY to the .env file on your PC (both are free) and restart the app.
+        </Card>
+      </div>
+    );
+
   return (
-    <div className="space-y-4">
-      <PageHeader title="AI assistant">
+    <div>
+      <PageHeader title="AI Assistant">
         {msgs.length > 0 && (
           <IconButton label="New chat" onClick={() => setMsgs([])}>
             <SquarePen className="h-[21px] w-[21px]" strokeWidth={2} />
           </IconButton>
         )}
       </PageHeader>
-      {!providers.length ? (
-        <Card className="p-4 text-[15px] text-muted">
-          No AI provider is set up. Add GEMINI_API_KEY or GROQ_API_KEY to the .env file on your PC (both are free) and restart the app.
-        </Card>
+
+      {msgs.length === 0 ? (
+        <div className="flex min-h-[calc(100dvh-330px)] flex-col items-center justify-center px-6 text-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <p className="text-[22px] font-semibold tracking-[-0.02em] text-fg">How can I help?</p>
+          <p className="mt-1.5 max-w-xs text-[15px] text-muted">Ask about your holdings, where your money is, dividends or what is coming up.</p>
+          <p className="mt-4 max-w-xs text-[12px] leading-relaxed text-faint">
+            Your holdings (symbols, amounts, brokers) are sent to {who} to answer. Free tiers may use what you send to improve their models.
+          </p>
+        </div>
       ) : (
-        <>
-          {msgs.length === 0 && (
-            <section>
-              <p className="px-1 pb-3 text-[15px] text-muted">Ask about your own holdings: what you own, where your money is, dividends and what is coming up.</p>
-              <Card>
-                <ul>
-                  {QUICK.map((q, i) => (
-                    <li key={q}>
-                      <button type="button" onClick={() => send(q)} className="flex w-full items-center pl-4 text-left active:bg-fill/[0.08]">
-                        <span className={cn("flex flex-1 items-center gap-2 py-3 pr-3 text-[17px] text-accent", i < QUICK.length - 1 && "hairline")}>
-                          <span className="flex-1">{q}</span>
-                          <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            </section>
-          )}
-          <div className="space-y-2">
-            {msgs.map((m, i) =>
-              m.role === "user" ? (
-                <div key={i} data-role="user" className="ml-12 flex justify-end">
-                  <p className="rounded-[18px] bg-accent px-3.5 py-2 text-[17px] leading-snug text-white">{m.content}</p>
+        <div className="space-y-6 pb-4 pt-4">
+          {msgs.map((m, i) =>
+            m.role === "user" ? (
+              <div key={i} data-role="user" className="flex justify-end pl-12">
+                <p className="whitespace-pre-wrap rounded-[20px] bg-fill/[0.14] px-4 py-2.5 text-[16px] leading-snug text-fg">{m.content}</p>
+              </div>
+            ) : (
+              <div key={i} data-role="assistant" className="flex gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden>
+                  <Sparkles className="h-4 w-4" />
                 </div>
-              ) : (
-                <div key={i} data-role="assistant" className="mr-6 break-words rounded-[18px] bg-surface px-3.5 py-2.5 text-[17px] leading-snug text-fg">
+                <div className="min-w-0 flex-1 break-words text-[16px] leading-relaxed text-fg">
                   <Answer text={m.content} />
                 </div>
-              ),
-            )}
-            {busy && (
-              <div className="inline-flex gap-1 rounded-[18px] bg-surface px-4 py-3" aria-label="Thinking">
-                {[0, 1, 2].map((d) => (
-                  <span key={d} className="h-2 w-2 animate-pulse rounded-full bg-faint" style={{ animationDelay: `${d * 0.2}s` }} />
-                ))}
               </div>
-            )}
-            {err && (
-              <p role="alert" className="px-1 text-[15px] text-down">
-                {err}
-              </p>
-            )}
-          </div>
+            ),
+          )}
+          {busy && (
+            <div className="flex items-center gap-3" aria-label="Thinking">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-accent">
+                <Sparkles className="h-4 w-4 animate-pulse" />
+              </div>
+              <span className="text-[15px] text-muted">Thinking…</span>
+            </div>
+          )}
+          {err && (
+            <p role="alert" className="rounded-[12px] bg-down-soft px-3.5 py-2.5 text-[15px] text-down">
+              {err}
+            </p>
+          )}
+        </div>
+      )}
+      <div ref={end} className="h-44" aria-hidden />
+
+      {/* Composer pinned above the tab bar, like ChatGPT / Claude */}
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+52px)] z-30 bg-gradient-to-t from-page via-page/95 to-transparent pt-6">
+        <div className="mx-auto max-w-[640px] px-4 pb-2">
+          {msgs.length === 0 && (
+            <div className="no-scrollbar -mx-4 mb-2.5 flex gap-2 overflow-x-auto px-4">
+              {QUICK.map((q) => (
+                <button key={q} type="button" onClick={() => send(q)} className="w-[200px] shrink-0 rounded-[16px] border-[0.5px] border-line bg-surface px-3.5 py-2.5 text-left text-[14px] leading-snug text-fg active:opacity-70">
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           <form
-            className="relative"
+            className="flex items-end gap-2 rounded-[26px] border-[0.5px] border-line bg-surface py-1.5 pl-4 pr-1.5 shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
             onSubmit={(e) => {
               e.preventDefault();
               send(text);
             }}
           >
-            <Textarea
+            <textarea
+              ref={box}
               aria-label="Your question"
-              placeholder="Ask about your portfolio"
+              placeholder="Message AI Assistant"
               rows={1}
-              className="block min-h-[44px] resize-none rounded-[22px] border-[0.5px] border-line bg-surface py-[10px] pl-4 pr-12 leading-6"
+              className="max-h-40 min-h-[36px] flex-1 resize-none bg-transparent py-[7px] text-[16px] leading-[22px] text-fg placeholder:text-faint focus:outline-none"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
@@ -128,17 +157,14 @@ export function Ask() {
               type="submit"
               aria-label="Send"
               disabled={!text.trim() || busy}
-              className="absolute right-[6px] top-1/2 flex h-[30px] -translate-y-1/2 w-[30px] items-center justify-center rounded-full bg-accent text-white disabled:opacity-30"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fg text-page transition-opacity disabled:opacity-20"
             >
-              <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.75} />
+              <ArrowUp className="h-[19px] w-[19px]" strokeWidth={2.5} />
             </button>
           </form>
-          <div ref={end} />
-          <p className="px-1 text-[13px] leading-relaxed text-muted">
-            Your holdings (symbols, amounts, brokers) are sent to {who} to answer. Free tiers may use what you send to improve their models. Answers can be wrong and are not financial advice.
-          </p>
-        </>
-      )}
+          <p className="pt-1.5 text-center text-[11px] text-faint">AI can make mistakes. Not financial advice.</p>
+        </div>
+      </div>
     </div>
   );
 }

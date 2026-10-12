@@ -291,3 +291,19 @@ def test_tailscale_address_detection(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: None)  # not installed
     monkeypatch.setattr(netinfo.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("192.168.1.4", 0))])
     assert netinfo.tailscale_addresses() == []
+
+
+def test_broker_is_optional_for_holdings_and_uploads(api, client):
+    api.ok(client.post("/api/holdings", json={"symbol": "MSFT", "quantity": "5", "avg_cost": "400"}))
+    assert [r["broker"] for r in api.ok(client.get("/api/holdings"))] == ["No broker"]
+    csv = b"symbol,quantity,avg_cost\nAAPL,3,150\nMSFT,6,410\n"
+    api.ok(client.post("/api/import/commit", files={"file": ("h.csv", csv, "text/csv")}, data={"replace": "false"}))
+    rows = {r["symbol"]: r for r in api.ok(client.get("/api/holdings"))}
+    assert D(rows["MSFT"]["quantity"]) == 6 and rows["AAPL"]["broker"] == "No broker"
+    # tag later, then untag again
+    b = api.broker("Moomoo")
+    api.ok(client.put(f"/api/holdings/{rows['AAPL']['id']}", json={"broker_id": b["id"]}))
+    api.ok(client.put(f"/api/holdings/{rows['AAPL']['id']}", json={"broker_id": None}))
+    assert {r["broker"] for r in api.ok(client.get("/api/holdings"))} == {"No broker"}
+    nb = next(x for x in api.ok(client.get("/api/brokers")) if x["name"] == "No broker")
+    assert client.put(f"/api/brokers/{nb['id']}", json={"name": "Other"}).status_code == 422

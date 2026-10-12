@@ -112,7 +112,9 @@ export function Summary({ data }: { data: Portfolio }) {
             </option>
           ))}
         </select>
-        <span className="tabular">{fx.map((f) => `${f.from} ${f.rate === null ? "N/A" : fxStr(f.rate)}`).join(" · ")}</span>
+        <span className="tabular" title="Exchange rates: ECB reference rates (published once each working day), then ExchangeRate-API">
+          {fx.map((f) => `${f.from} ${f.rate === null ? "N/A" : fxStr(f.rate)}${f.date && f.date !== localToday() ? ` (${shortDay(f.date)})` : ""}`).join(" · ")}
+        </span>
         <span>· {shortStamp(data.prices_as_of ?? data.generated_at)}</span>
       </div>
       {t.incomplete && <p className="mt-1.5 text-[13px] text-gold">Totals exclude holdings without a price or exchange rate.</p>}
@@ -128,4 +130,13 @@ export function shortStamp(iso: string) {
 function fxStr(r: string) {
   const n = Number(r);
   return n < 1 ? n.toFixed(3) : n.toFixed(2);
+}
+
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function shortDay(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }

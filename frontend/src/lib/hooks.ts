@@ -7,7 +7,10 @@ export const usePortfolio = (base?: string) =>
   useQuery({ queryKey: ["portfolio", base], queryFn: () => api<Portfolio>(`/portfolio${base ? `?base=${base}` : ""}`) });
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/settings") });
 export const useMeta = () => useQuery({ queryKey: ["meta"], queryFn: () => api<Meta>("/meta"), staleTime: Infinity });
-export const useBrokers = () => useQuery({ queryKey: ["brokers"], queryFn: () => api<Broker[]>("/brokers") });
+/** Untagged holdings live under this built-in broker; it never shows up in broker pickers. */
+export const NO_BROKER = "No broker";
+export const useBrokers = () =>
+  useQuery({ queryKey: ["brokers"], queryFn: () => api<Broker[]>("/brokers"), select: (bs) => bs.filter((b) => b.name !== NO_BROKER) });
 export const useCategories = () => useQuery({ queryKey: ["categories"], queryFn: () => api<Category[]>("/categories") });
 export const useInstruments = () => useQuery({ queryKey: ["instruments"], queryFn: () => api<Instrument[]>("/instruments") });
 export const useDividendSummary = () => useQuery({ queryKey: ["dividend-summary"], queryFn: () => api<DividendSummary>("/dividends/summary") });

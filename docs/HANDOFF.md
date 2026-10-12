@@ -17,7 +17,9 @@ Principles the owner set, in their words where possible:
 
 Run: `start.bat` (real data, `data/portfolio.db`) or `start-demo.bat` (sample data, `data/demo.db`). iPhone: Safari on the same Wi-Fi, the console prints the address. See README.
 
-Tabs (in this order; the app opens on Dashboard): Dashboard, Portfolio, Dividends, Calendar, AI assistant. Look: iOS-native (system colours, grouped lists with hairlines, large titles with toolbar icons, Stocks-style holding rows with a return pill; amounts and details on tap).
+Brokers are optional: untagged holdings live under a built-in "No broker" (`holdings.NO_BROKER`, hidden from pickers, cannot be renamed). Upload accepts Excel/CSV, PDF statements and broker-app screenshots (several at once, Gemini only). Exchange rates are ECB/ExchangeRate-API daily rates; the Dashboard shows the rate date when it is not today.
+
+Tabs (in this order; the app opens on Dashboard): Dashboard, Portfolio, Dividends, Calendar, AI Assistant. Look: iOS-native (system colours, grouped lists with hairlines, large titles with toolbar icons, Stocks-style holding rows with a return pill; amounts and details on tap).
 - **Portfolio**: total value + P/L in the base currency, header FX rates for currencies you hold, Refresh, privacy eye. One card per user category. The same stock at several brokers is one row; details list "Held at" per broker (tap to edit). Add holding (stock/ETF, or fund/savings such as EPF/ASB/ASNB/unit trusts), Upload (Excel/CSV), Arrange (drag and drop; also a category picker in each stock's settings).
 - **Dashboard**: value over time (one point per day, saved when the app is opened, on refresh and nightly) with 1M/3M/6M/1Y/All; "Where your money is" by category / currency / broker.
 - **Dividends**: expected per year and per month, received in the last 12 months, "Did these arrive?" confirmations, month-by-month chart, by holding, recently received.

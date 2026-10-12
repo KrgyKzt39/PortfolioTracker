@@ -7,7 +7,7 @@ export const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
   { id: "portfolio", label: "Portfolio", icon: BarChart3 },
   { id: "dividends", label: "Dividends", icon: DollarSign },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "ask", label: "AI assistant", icon: Sparkles },
+  { id: "ask", label: "AI Assistant", icon: Sparkles },
 ];
 
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {

@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { CURRENCY_LIST, cn, money, priceStr, today } from "../lib/format";
-import { useBrokers, useCategories, useInstruments, useInvalidateAll, useMeta, useOpenSheet } from "../lib/hooks";
+import { NO_BROKER, useBrokers, useCategories, useInstruments, useInvalidateAll, useMeta, useOpenSheet } from "../lib/hooks";
 import type { Broker, Category, DividendEvent, Instrument, Payment } from "../lib/types";
 import { Button, ConfirmSheet, Field, Input, Segmented, Select, Sheet, Spinner, Textarea, Toggle, useToast } from "./ui";
 
@@ -114,7 +114,7 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
   const presetInst = instruments.data?.find((i) => i.symbol === preset?.symbol);
   const [isFund, setIsFund] = useState(existing ? existing.kind === "fund" : presetInst?.kind === "fund");
   const [v, setV] = useState({
-    broker_id: String(existing?.broker_id ?? preset?.broker_id ?? ""),
+    broker_id: existing && existing.broker !== NO_BROKER ? String(existing.broker_id) : String(preset?.broker_id ?? ""),
     new_broker: "",
     symbol: existing?.symbol ?? preset?.symbol ?? "",
     name: "",
@@ -127,10 +127,9 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
   });
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
   const brokerList = brokers.data ?? [];
-  const noBrokers = brokers.isSuccess && brokerList.length === 0 && !existing;
   const known = instruments.data?.find((i) => i.symbol === v.symbol.trim().toUpperCase());
   const ccy = existing?.currency ?? known?.currency ?? (v.currency || (v.symbol ? (isFund ? "MYR" : guessCcy(v.symbol)) : ""));
-  const newBroker = noBrokers || v.broker_id === "__new";
+  const newBroker = v.broker_id === "__new";
   const isNewStock = !existing && !known && v.symbol.trim() !== "";
 
   const save = () =>
@@ -158,7 +157,7 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
         });
     }, existing ? "Holding updated" : `${v.symbol.trim().toUpperCase()} added`);
 
-  const title = existing ? `${existing.symbol} at ${existing.broker}` : isFund ? "Add fund or savings" : "Add holding";
+  const title = existing ? (existing.broker === NO_BROKER ? existing.symbol : `${existing.symbol} at ${existing.broker}`) : isFund ? "Add fund or savings" : "Add holding";
   return (
     <Sheet open onClose={onClose} title={title} footer={<Footer onClose={onClose} onSave={save} busy={busy} onDelete={existing ? () => setConfirm(true) : undefined} />}>
       <form
@@ -185,27 +184,19 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
             {isFund ? "EPF, ASB, ASNB, unit trusts and the like. Enter the balance and what you put in; update the balance whenever you check it." : "Copy the quantity and average price from your broker app."}
           </p>
         )}
-        {brokers.isLoading ? (
-          <Field label={isFund ? "Held with" : "Broker"}>{(id) => <Input id={id} disabled placeholder="Loading…" />}</Field>
-        ) : noBrokers ? (
-          <Field label={isFund ? "Held with" : "Broker"} error={fe("name")}>
-            {(id) => <Input id={id} value={v.new_broker} onChange={set("new_broker")} placeholder={isFund ? "e.g. KWSP, ASNB, Public Mutual" : "e.g. Rakuten Trade"} />}
-          </Field>
-        ) : (
-          <Field label={isFund ? "Held with" : "Broker"} error={fe("broker_id") || fe("name")}>
-            {(id) => (
-              <Select id={id} value={v.broker_id} onChange={set("broker_id")}>
-                <option value="">Select…</option>
-                {brokerList.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-                <option value="__new">＋ New…</option>
-              </Select>
-            )}
-          </Field>
-        )}
+        <Field label={isFund ? "Held with (optional)" : "Broker (optional)"} error={fe("broker_id") || fe("name")}>
+          {(id) => (
+            <Select id={id} value={v.broker_id} onChange={set("broker_id")} disabled={brokers.isLoading}>
+              <option value="">None</option>
+              {brokerList.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+              <option value="__new">＋ New…</option>
+            </Select>
+          )}
+        </Field>
         {v.broker_id === "__new" && <Input aria-label="New broker name" value={v.new_broker} onChange={set("new_broker")} placeholder={isFund ? "e.g. KWSP" : "Broker name"} />}
         {!existing && (
           <Field
@@ -286,7 +277,7 @@ function HoldingEditor({ existing, preset, onClose }: { existing?: HoldingRow; p
       <ConfirmSheet
         open={confirm}
         title="Remove holding?"
-        message={`Removes ${existing?.symbol} at ${existing?.broker}. Dividends you recorded stay in your history.`}
+        message={`Removes ${existing?.symbol}${existing && existing.broker !== NO_BROKER ? ` at ${existing.broker}` : ""}. Dividends you recorded stay in your history.`}
         confirmLabel="Remove"
         onConfirm={() => run(() => api(`/holdings/${existing!.id}`, { method: "DELETE" }), "Holding removed")}
         onClose={() => setConfirm(false)}
@@ -541,11 +532,9 @@ interface ImportPreview {
 }
 
 export function ImportSheet({ onClose }: { onClose: () => void }) {
-  const brokers = useBrokers();
   const toast = useToast();
   const invalidate = useInvalidateAll();
   const [file, setFile] = useState<File | null>(null);
-  const [brokerId, setBrokerId] = useState("");
   const [replace, setReplace] = useState(true);
   const [mapping, setMapping] = useState<Record<string, number | null> | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -553,19 +542,24 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const meta = useMeta();
-  const canReadPdf = (meta.data?.ai_providers ?? []).length > 0;
+  const providers = meta.data?.ai_providers ?? [];
+  const canReadPdf = providers.length > 0;
+  const canReadImages = providers.includes("gemini");
+  const [picked, setPicked] = useState<string | null>(null);
 
-  const readStatement = async (pdf: File) => {
+  // PDFs and screenshots are read by AI, then go through the same preview as a spreadsheet.
+  const readWithAI = async (files: File[]) => {
     const form = new FormData();
-    form.append("file", pdf);
+    for (const f of files) form.append("file", f);
+    const what = files.some((f) => f.type.startsWith("image/") || /\.(png|jpe?g|heic|heif|webp)$/i.test(f.name)) ? "screenshot" : "PDF";
     setBusy(true);
     setErr(null);
     try {
       const r = await api<{ rows: StatementRow[]; provider: string; statement_date: string | null }>("/ai/statement", { form });
-      if (!r.rows.length) throw new Error("No holdings found in this PDF. Try your broker's Excel or CSV export instead.");
-      const csv = new File([statementCsv(r.rows)], pdf.name.replace(/\.pdf$/i, "") + ".csv", { type: "text/csv" });
+      if (!r.rows.length) throw new Error(`No holdings found in this ${what}. Try a clearer ${what === "PDF" ? "statement" : "screenshot of your positions screen"}, or your broker's Excel export.`);
+      const csv = new File([statementCsv(r.rows)], "holdings-from-ai.csv", { type: "text/csv" });
       setFile(csv);
-      setAiNote(`Read ${r.rows.length} holding${r.rows.length === 1 ? "" : "s"} from the PDF${r.statement_date ? ` (statement date ${r.statement_date})` : ""}. AI can misread numbers: check every row below before importing.`);
+      setAiNote(`Read ${r.rows.length} holding${r.rows.length === 1 ? "" : "s"} from the ${what}${files.length > 1 ? "s" : ""}${r.statement_date ? ` (dated ${r.statement_date})` : ""}. AI can misread numbers: check every row below before importing.`);
       setBusy(false);
       await run("preview", { file: csv, mapping: null });
     } catch (e) {
@@ -575,14 +569,12 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const run = async (mode: "preview" | "commit", o: { file?: File; brokerId?: string; replace?: boolean; mapping?: Record<string, number | null> | null } = {}) => {
+  const run = async (mode: "preview" | "commit", o: { file?: File; replace?: boolean; mapping?: Record<string, number | null> | null } = {}) => {
     const f = o.file ?? file;
     if (!f) return;
-    const b = o.brokerId ?? brokerId;
     const m = "mapping" in o ? o.mapping : mapping;
     const form = new FormData();
     form.append("file", f);
-    if (b && b !== "__column") form.append("broker_id", b);
     form.append("replace", String(o.replace ?? replace));
     if (m) form.append("mapping", JSON.stringify(m));
     setBusy(true);
@@ -606,7 +598,6 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
     }
   };
   const s = preview?.summary;
-  const brokerName = brokers.data?.find((b) => String(b.id) === brokerId)?.name;
 
   return (
     <Sheet
@@ -626,55 +617,46 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="space-y-4">
-        <p className="text-xs text-muted">
-          Export holdings from your broker as Excel (.xlsx) or CSV. Each row needs a symbol, quantity and average cost.
-          {canReadPdf && " You can also upload a PDF statement: AI reads the holdings and you check them before anything is saved."}
-        </p>
-        <Field label="Broker">
-          {(id) => (
-            <Select
-              id={id}
-              value={brokerId}
-              onChange={(e) => {
-                setBrokerId(e.target.value);
-                run("preview", { brokerId: e.target.value });
-              }}
-            >
-              <option value="">Select…</option>
-              {(brokers.data ?? []).map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-              <option value="__column">Named in a column of the file</option>
-            </Select>
-          )}
-        </Field>
-        <input
-          type="file"
-          accept={`.xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet${canReadPdf ? ",.pdf,application/pdf" : ""}`}
-          aria-label="Holdings file"
-          className="block w-full text-sm text-muted file:mr-3 file:rounded-xl file:border-0 file:bg-ink-700 file:px-3 file:py-2 file:font-semibold file:text-fg"
-          onChange={(e) => {
-            const f = e.target.files?.[0] ?? null;
-            setMapping(null);
-            setPreview(null);
-            setAiNote(null);
-            if (f && f.name.toLowerCase().endsWith(".pdf")) return void readStatement(f);
-            setFile(f);
-            if (f) run("preview", { file: f, mapping: null });
-          }}
-        />
+        <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-[14px] border-[1.5px] border-dashed border-fill/40 bg-surface px-4 py-6 text-center active:opacity-70">
+          <Upload className="h-7 w-7 text-accent" aria-hidden />
+          <span className="text-[17px] font-semibold text-accent">{picked ? "Choose another" : "Choose file"}</span>
+          <span className="text-[13px] text-muted">
+            {picked ? picked : `Excel or CSV from your broker${canReadPdf ? ", a PDF statement" : ""}${canReadImages ? ", or screenshots of your broker app's positions screen" : ""}`}
+          </span>
+          <input
+            type="file"
+            multiple={canReadImages}
+            accept={`.xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet${canReadPdf ? ",.pdf,application/pdf" : ""}${canReadImages ? ",image/*" : ""}`}
+            aria-label="Holdings file"
+            className="sr-only"
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              e.target.value = "";
+              if (!files.length) return;
+              setMapping(null);
+              setPreview(null);
+              setAiNote(null);
+              setPicked(files.length > 1 ? `${files.length} files` : files[0].name);
+              const isAI = (f: File) => /\.(pdf|png|jpe?g|heic|heif|webp)$/i.test(f.name) || f.type.startsWith("image/") || f.type === "application/pdf";
+              if (files.some(isAI)) return void readWithAI(files.filter(isAI));
+              setFile(files[0]);
+              run("preview", { file: files[0], mapping: null });
+            }}
+          />
+        </label>
+        {canReadImages && !picked && (
+          <p className="px-1 text-[13px] text-muted">Screenshots: open your broker app's positions screen and take one screenshot per screen; select them all at once. Nothing is saved until you press Import.</p>
+        )}
         <Toggle
           checked={replace}
           onChange={(v) => {
             setReplace(v);
             run("preview", { replace: v });
           }}
-          label="This file is my full list for this broker"
-          description="Stocks not in the file are removed from this broker. Turn off to only add or update."
+          label="This is my full list"
+          description="Holdings not in the upload are removed. Turn off to only add or update."
         />
-        {busy && !preview && <p className="text-xs text-muted">Reading…</p>}
+        {busy && !preview && <p className="px-1 text-[13px] text-muted">{file ? "Reading…" : "Reading with AI… usually 5 to 10 seconds."}</p>}
         {aiNote && <p className="rounded-xl bg-gold/10 p-3 text-xs text-gold">{aiNote}</p>}
         <FormError error={err} />
         {preview && s && (
@@ -713,7 +695,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
               </p>
               {s.removed.length > 0 && (
                 <p className="mt-1 text-gold">
-                  Will remove from {brokerName ?? "this broker"}: {s.removed.map((r) => r.symbol).join(", ")}
+                  Will remove: {s.removed.map((r) => r.symbol).join(", ")}
                 </p>
               )}
               {s.created.brokers.length + s.created.categories.length > 0 && (
@@ -725,7 +707,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
                 <li key={r.line} className="flex gap-3 px-3 py-2">
                   <span className="w-20 shrink-0 font-semibold text-fg">{r.symbol || `Line ${r.line}`}</span>
                   <span className={cn("w-20 shrink-0", r.status === "error" ? "text-down" : r.status === "new" ? "text-up" : "text-muted")}>{r.status}</span>
-                  <span className="min-w-0 flex-1 truncate text-muted">{r.message ?? (r.quantity ? `${Number(r.quantity).toLocaleString()} at ${r.broker}` : "")}</span>
+                  <span className="min-w-0 flex-1 truncate text-muted">{r.message ?? (r.quantity ? `${Number(r.quantity).toLocaleString()}${r.broker && r.broker !== NO_BROKER ? ` at ${r.broker}` : ""}` : "")}</span>
                 </li>
               ))}
             </ul>

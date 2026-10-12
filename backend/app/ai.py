@@ -55,12 +55,12 @@ def _error_text(r: httpx.Response) -> str:
         return r.text[:200]
 
 
-def _gemini(client, system: str, turns: list[dict], pdf: bytes | None = None, as_json: bool = False) -> str:
+def _gemini(client, system: str, turns: list[dict], files: list[tuple[str, bytes]] | None = None, as_json: bool = False) -> str:
     contents = []
     for i, t in enumerate(turns):
         parts = [{"text": t["content"]}]
-        if pdf is not None and i == len(turns) - 1:
-            parts.insert(0, {"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf).decode()}})
+        if files and i == len(turns) - 1:
+            parts[:0] = [{"inline_data": {"mime_type": mime, "data": base64.b64encode(b).decode()}} for mime, b in files]
         contents.append({"role": "model" if t["role"] == "assistant" else "user", "parts": parts})
     body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents,
             "generationConfig": {"temperature": 0.1 if as_json else 0.4}}
@@ -94,16 +94,17 @@ def _openai_compatible(client, base: str, key: str, model: str, system: str, tur
         raise AIError(f"{name} returned no answer") from exc
 
 
-def complete(preferred: str, system: str, turns: list[dict], pdf: bytes | None = None, as_json=False) -> tuple[str, str]:
+def complete(preferred: str, system: str, turns: list[dict], files: list[tuple[str, bytes]] | None = None,
+             as_json=False) -> tuple[str, str]:
     """Returns (text, provider used). Falls back to the next provider on errors."""
     errors = []
     with _client_factory() as client:
         for p in _order(preferred):
             try:
                 if p == "gemini":
-                    return _gemini(client, system, turns, pdf, as_json), p
-                if pdf is not None:
-                    continue  # only Gemini reads PDF files directly; others get extracted text instead
+                    return _gemini(client, system, turns, files, as_json), p
+                if files:
+                    continue  # only Gemini reads files directly; others get extracted text instead
                 if p == "groq":
                     return _openai_compatible(client, "https://api.groq.com/openai/v1", config.GROQ_API_KEY,
                                               config.GROQ_MODEL, system, turns, as_json, "groq"), p
@@ -116,7 +117,9 @@ def complete(preferred: str, system: str, turns: list[dict], pdf: bytes | None =
 
 # ---------------------------------------------------------------- statements
 
-STATEMENT_PROMPT = """You read brokerage, fund and savings statements and list the holdings in them.
+STATEMENT_PROMPT = """You read brokerage, fund and savings statements, or screenshots of a broker app's holdings/positions
+screen (e.g. Moomoo, Longbridge, Rakuten Trade, Tiger), and list the holdings in them. Several screenshots may be parts
+of one long list: combine them and list each holding once.
 Return JSON only: {"statement_date": "YYYY-MM-DD or null", "holdings": [{"symbol": str, "name": str or null,
 "quantity": number, "avg_cost": number or null, "total_cost": number or null, "currency": "3-letter code or null",
 "kind": "stock" | "etf" | "reit" | "fund"}]}
@@ -126,7 +129,9 @@ Rules:
   Hong Kong as code.HK (0005.HK); Singapore as code.SI (D05.SI). For funds and savings (EPF, ASB, ASNB,
   unit trusts) use a short readable name such as "EPF" or "ASB" and kind "fund".
 - quantity: number of shares or units. For EPF/ASB-style balances, the balance.
-- avg_cost: average cost per share/unit if shown. total_cost: total amount invested if that is what is shown.
+- avg_cost: average cost per share/unit if shown ("Avg cost", "Average price", "Cost price"). If the app shows both an
+  average cost and a "diluted cost", use the average cost. total_cost: total amount invested if that is what is shown.
+- Do not use the current/market price as the cost. Ignore market value, today's change and P/L columns.
 - Numbers as plain numbers without currency symbols or thousands separators. Never invent values: use null.
 """
 
@@ -155,18 +160,47 @@ def _num(v) -> Decimal | None:
     return d if d.is_finite() and d >= 0 else None
 
 
-def extract_statement(content: bytes, filename: str) -> dict:
-    """PDF -> {"rows": [...], "provider": ..., "statement_date": ...}. Nothing is saved here."""
-    if not content.startswith(b"%PDF"):
-        raise AIError("Please upload the statement as a PDF file.")
-    if len(content) > 15_000_000:
-        raise AIError("PDF is larger than 15 MB")
-    text = pdf_text(content)
+IMAGE_TYPES = {b"\x89PNG": "image/png", b"\xff\xd8\xff": "image/jpeg"}
+
+
+def _file_type(content: bytes) -> str | None:
+    if content.startswith(b"%PDF"):
+        return "application/pdf"
+    for magic, mime in IMAGE_TYPES.items():
+        if content.startswith(magic):
+            return mime
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    if content[4:8] == b"ftyp" and content[8:12] in (b"heic", b"heix", b"mif1", b"msf1", b"heis"):
+        return "image/heic"
+    return None
+
+
+def extract_statement(files: list[tuple[bytes, str]] | bytes, filename: str = "statement.pdf") -> dict:
+    """PDF statement or broker-app screenshots -> {"rows": [...], "provider": ..., "statement_date": ...}. Saves nothing."""
+    if isinstance(files, bytes):
+        files = [(files, filename)]
+    typed = []
+    for content, name in files:
+        mime = _file_type(content)
+        if mime is None:
+            raise AIError(f"{name}: upload a PDF statement or a screenshot (PNG, JPEG or HEIC).")
+        typed.append((mime, content))
+    if not typed:
+        raise AIError("Choose a file first.")
+    if len(typed) > 10:
+        raise AIError("Up to 10 screenshots at a time.")
+    if sum(len(c) for _, c in typed) > 15_000_000:
+        raise AIError("Files are larger than 15 MB in total")
     have = available()
-    ask = "List the holdings in this statement."
+    images = [t for t in typed if t[0] != "application/pdf"]
+    ask = "List the holdings in these screenshots." if images else "List the holdings in this statement."
     if "gemini" in have:
-        raw, used = complete("gemini", STATEMENT_PROMPT, [{"role": "user", "content": ask}], pdf=content, as_json=True)
+        raw, used = complete("gemini", STATEMENT_PROMPT, [{"role": "user", "content": ask}], files=typed, as_json=True)
     else:
+        if images:
+            raise AIError("Reading screenshots needs GEMINI_API_KEY in .env (free). PDFs with text also work with Groq.")
+        text = "\n\n".join(pdf_text(c) for _, c in typed)
         if len(text.strip()) < 50:
             raise AIError("This PDF has no readable text (probably scanned). Add GEMINI_API_KEY to read scanned statements.")
         raw, used = complete(have[0], STATEMENT_PROMPT, [{"role": "user", "content": f"{ask}\n\n---\n{text[:20000]}"}],

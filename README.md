@@ -8,7 +8,7 @@ Your brokers stay the record of your trades. This app holds a snapshot of each h
 - **Dashboard**: value over time and where your money is (by category, currency or broker).
 - **Dividends**: expected per year and per month, received in the last 12 months, a month-by-month chart, each holding's expected dividend and yield, and a short "did these arrive?" list to confirm payments.
 - **Calendar**: upcoming ex-dates, payment dates and earnings dates for stocks you hold.
-- **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first. With an AI key set, you can also upload a PDF statement.
+- **Add holdings** by hand, or upload your broker's Excel (.xlsx) or CSV export with a preview first. With a Gemini key set, you can also upload a PDF statement or screenshots of your broker app's positions screen. Brokers are optional: tag a holding to one only if you want the split.
 - **Ask AI** (optional, its own tab): plain-language questions about your own holdings, e.g. "How is my money split by currency?". Factual answers from your data, not advice.
 
 ## Run it on Windows
@@ -88,7 +88,7 @@ All maths uses Python `Decimal`; rounding happens only for display.
 
 Most broker exports work as-is. The app finds the header row (even under title rows in Excel) and guesses the columns: symbol/code/ticker, quantity/qty/shares/units, average cost/avg price/cost price, plus optional name, currency, category and broker. You can change the mapping in the preview. Values like `"2,800"` or `RM10.18` are fine.
 
-Choose the broker, then either "This file is my full list for this broker" (stocks missing from the file are removed from that broker) or turn it off to only add or update. Nothing is saved until you press Import. Settings → Data → Export holdings gives a CSV in the same format.
+No broker is needed. A "broker" column in the file is used if present. "This is my full list" removes holdings missing from the upload (for the brokers in the file, or untagged holdings); turn it off to only add or update. Nothing is saved until you press Import. Settings → Data → Export holdings gives a CSV in the same format.
 
 Symbols: Bursa `1155.KL`, US `MSFT`, SGX `D05.SI`, HK `0005.HK`, LSE `VOD.L`. Funds without a ticker (e.g. ASNB) can use any short name with a manual price.
 
